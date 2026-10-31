@@ -558,7 +558,7 @@
         }
 
         /* ── output ──────────────────────────────────────────────── */
-        const say = line.text.match(/^(?:show|say|print|display|write)\s+(.+?)\s*\.?$/i);
+        const say = line.text.match(/^(?:show|say|print|display|write)\s+(?!the\s+(?:web ?site|web ?page|page|site)\b)(.+?)\s*\.?$/i);
         if (say) {
           stmts.push({ k: "show", expr: parseExpr(say[1].replace(/\.$/, "")), line: line.n });
           idx++;
@@ -672,12 +672,13 @@
     if (/^(add|create|make|include|put)\b.*\bbutton\b/.test(low)) {
       const label = first || "Click here";
       let href = "#";
-      const lm = text.match(/\b(?:linking to|that goes to)\s+"([^"]+)"/i);
+      const lm = text.match(/\b(?:linking to|that goes to|that opens|which opens|opens|pointing to)\s+"([^"]+)"/i);
       if (lm) href = lm[1];
       else if (qs[1]) href = qs[1];
       return { type: "button", text: label, href };
     }
     if (/^(add|create|make|include)\b.*\b(link|hyperlink)\b/.test(low)) return { type: "link", text: qs[0] || "Link", href: qs[1] || "#" };
+    if (/^(show|embed|display|put|open)\b.*\b(website|web page|webpage|page|site)\b/.test(low) && qs[0]) return { type: "embed", src: qs[0], height: (text.match(/\b(\d{3,4})\s*(?:pixels|px|tall)\b/i) || [])[1] };
     if (/^(add|create|make|include|put)\b.*\b(image|picture|photo|logo)\b/.test(low)) return { type: "image", src: qs[0] || "", alt: qs[1] || "Image" };
     if (/^(add|create|make|include)\b.*\blist\b/.test(low)) {
       // a single quoted item followed by "plus <value>" becomes a live expression,
@@ -767,6 +768,7 @@
         case "paragraph": targetBlocks().push({ type: "paragraph", text: renderText(p.text, scope) }); break;
         case "button": targetBlocks().push({ type: "button", text: p.text, href: p.href }); break;
         case "link": targetBlocks().push({ type: "link", text: p.text, href: p.href }); break;
+        case "embed": targetBlocks().push({ type: "embed", src: p.src, height: p.height }); break;
         case "image": targetBlocks().push({ type: "image", src: p.src, alt: p.alt }); break;
         case "list": {
           let items = p.items || [];
@@ -1129,8 +1131,10 @@
             return `${pad}<nav class="nav">\n${b.items.map((s) => `${pad}  <a href="#${esc(String(s).toLowerCase().replace(/\s+/g, "-"))}">${esc(s)}</a>`).join("\n")}\n${pad}</nav>\n`;
           case "heading": return `${pad}<h${b.level}>${esc(b.text)}</h${b.level}>\n`;
           case "paragraph": return `${pad}<p>${esc(b.text)}</p>\n`;
-          case "button": return `${pad}<a class="btn" href="${esc(b.href)}">${esc(b.text)}</a>\n`;
-          case "link": return `${pad}<p><a class="link" href="${esc(b.href)}">${esc(b.text)}</a></p>\n`;
+          case "button": return `${pad}<a class="btn" href="${esc(b.href)}"${b.href && b.href !== "#" ? ' target="_blank" rel="noopener noreferrer"' : ""}>${esc(b.text)}</a>\n`;
+          case "link": return `${pad}<p><a class="link" href="${esc(b.href)}"${b.href && b.href !== "#" ? ' target="_blank" rel="noopener noreferrer"' : ""}>${esc(b.text)}</a></p>\n`;
+          case "embed":
+            return `${pad}<div class="embed"><iframe src="${esc(b.src)}" title="Web page" loading="lazy" style="width:100%;height:${b.height ? Number(b.height) : 460}px;border:0;border-radius:12px;background:#fff" referrerpolicy="no-referrer"></iframe>${"\n"}${pad}  <p class="embed-note"><a href="${esc(b.src)}" target="_blank" rel="noopener noreferrer">Open this page in a browser</a></p>${"\n"}${pad}</div>\n`;
           case "image": return b.src ? `${pad}<img src="${esc(b.src)}" alt="${esc(b.alt)}" />\n` : `${pad}<div class="img-placeholder">Image</div>\n`;
           case "list":
             return b.ordered
@@ -1184,6 +1188,9 @@
   .form label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
   .form input, .form textarea { font: inherit; padding: 11px 13px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.35); background: transparent; color: inherit; width: 100%; }
   .sent { color: #16A34A; font-weight: 700; }
+  .embed { margin: 16px 0; }
+  .embed-note { font-size: 13px; margin: 6px 0 0; opacity: 0.7; }
+  .embed-note a { color: ${page.accent}; font-weight: 600; }
   .footer { margin-top: 40px; padding-top: 20px; font-size: 13px; border-top: 1px solid rgba(128,128,128,0.25); opacity: 0.75; }
   @media (max-width: 480px) { main { padding: 24px 16px 48px; } .btn { width: 100%; text-align: center; } }
 </style>
