@@ -1309,11 +1309,11 @@
   // Web pages usually refuse to be read by another site (that is the browser
   // security rule called CORS). When that happens we ask a public reader
   // service instead, so ordinary links still work.
-  const READERS = [
-    { name: "direct", url: (u) => u, ms: 8000 },
-    { name: "reader", url: (u) => "https://r.jina.ai/" + u, ms: 15000 },
-    { name: "mirror", url: (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u), ms: 12000 },
-  ];
+  // Web pages usually refuse to be read by another site (the browser rule
+  // called CORS). When that happens we ask reader services in parallel and
+  // take whichever answers first.
+  const READER_A = { name: "reader", url: (u) => "https://r.jina.ai/" + u, ms: 12000 };
+  const READER_B = { name: "mirror", url: (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u), ms: 11000 };
 
   function htmlToText(html) {
     const stripped = String(html)
@@ -1333,12 +1333,12 @@
     return m ? htmlToText(m[1]) : "";
   }
 
-  async function fetchWithTimeout(u, ms) {
+  async function fetchWithTimeout(u, ms, accept) {
     const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
     const timer = ctl ? setTimeout(() => ctl.abort(), ms) : null;
     try {
       return await fetch(u, {
-        headers: { Accept: "application/json, text/plain, text/html, */*" },
+        headers: { Accept: accept || "application/json, text/plain, text/html, */*" },
         signal: ctl ? ctl.signal : undefined,
       });
     } finally {
@@ -1346,59 +1346,95 @@
     }
   }
 
+  async function readThrough(reader, u) {
+    const r = await fetchWithTimeout(reader.url(u), reader.ms);
+    if (!r.ok) throw new Error("it answered " + r.status);
+    let raw = await r.text();
+    if (!raw || !raw.trim()) throw new Error("it sent nothing back");
+
+    if (reader.name === "mirror") {
+      try {
+        const wrap = JSON.parse(raw);
+        if (wrap && typeof wrap.contents === "string") raw = wrap.contents;
+      } catch (_) { /* not wrapped */ }
+    }
+
+    let text = raw;
+    let title = "";
+    if (reader.name === "reader") {
+      const tm = raw.match(/^\s*Title:\s*(.+)$/m);
+      if (tm) title = tm[1].trim();
+      const cut = raw.indexOf("Markdown Content:");
+      text = cut >= 0 ? raw.slice(cut + "Markdown Content:".length) : raw;
+      text = text
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/[*_`>]+/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    } else if (/^\s*<(!doctype|html)/i.test(raw) || /<html[\s>]/i.test(raw.slice(0, 400))) {
+      text = htmlToText(raw);
+      title = pageTitle(raw);
+    }
+
+    let json = null;
+    try { json = JSON.parse(raw); } catch (_) { json = null; }
+    if (!text && !json) throw new Error("it sent nothing useful");
+    return { ok: true, status: r.status, raw, text, json, title, via: reader.name, at: Date.now() };
+  }
+
   async function prefetchOne(u) {
     const hit = linkCache[u];
     if (hit && Date.now() - hit.at < LINK_TTL) return;
     let lastError = "no answer";
 
-    for (let k = 0; k < READERS.length; k++) {
-      const reader = READERS[k];
-      try {
-        const r = await fetchWithTimeout(reader.url(u), reader.ms);
-        if (!r.ok) { lastError = "it answered " + r.status; continue; }
+    // 1. straight to the link: instant when the site allows it (APIs)
+    try {
+      const r = await fetchWithTimeout(u, 6000);
+      if (r.ok) {
         let raw = await r.text();
-        if (!raw || !raw.trim()) { lastError = "it sent nothing back"; continue; }
-
-        if (reader.name === "mirror") {
-          try {
-            const wrap = JSON.parse(raw);
-            if (wrap && typeof wrap.contents === "string") raw = wrap.contents;
-          } catch (_) { /* not wrapped */ }
+        if (raw && raw.trim()) {
+          let json = null;
+          try { json = JSON.parse(raw); } catch (_) { json = null; }
+          const looksHtml = /^\s*<(!doctype|html)/i.test(raw) || /<html[\s>]/i.test(raw.slice(0, 400));
+          linkCache[u] = {
+            ok: true, status: r.status, raw,
+            text: looksHtml ? htmlToText(raw) : raw,
+            json,
+            title: looksHtml ? pageTitle(raw) : "",
+            via: "direct", at: Date.now(),
+          };
+          return;
         }
-
-        let text = raw;
-        let title = "";
-        if (reader.name === "reader") {
-          // the reader service answers with a short header, then the page text
-          const tm = raw.match(/^\s*Title:\s*(.+)$/m);
-          if (tm) title = tm[1].trim();
-          const cut = raw.indexOf("Markdown Content:");
-          text = cut >= 0 ? raw.slice(cut + "Markdown Content:".length) : raw;
-          text = text
-            .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-            .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-            .replace(/^#{1,6}\s*/gm, "")
-            .replace(/[*_`>]+/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-        } else if (/^\s*<(!doctype|html)/i.test(raw) || /<html[\s>]/i.test(raw.slice(0, 400))) {
-          text = htmlToText(raw);
-          title = pageTitle(raw);
-        }
-
-        let json = null;
-        try { json = JSON.parse(raw); } catch (_) { json = null; }
-
-        linkCache[u] = { ok: true, status: r.status, raw, text, json, title, via: reader.name, at: Date.now() };
-        return;
-      } catch (err) {
-        lastError = err && err.name === "AbortError" ? "it took too long" : (err && err.message ? err.message : String(err));
+        lastError = "it sent nothing back";
+      } else {
+        lastError = "it answered " + r.status;
       }
+    } catch (err) {
+      lastError = err && err.name === "AbortError" ? "it took too long" : "the browser blocked the request";
     }
+
+    // 2. ask reader services at the same time, keep the first good answer
+    const result = await new Promise((resolve) => {
+      let pending = 2, settled = false;
+      const done = (val) => { if (!settled) { settled = true; resolve(val); } };
+      [READER_A, READER_B].forEach((reader) => {
+        readThrough(reader, u)
+          .then((rec) => done(rec))
+          .catch((err) => {
+            lastError = err && err.name === "AbortError" ? "it took too long" : (err && err.message ? err.message : String(err));
+            pending -= 1;
+            if (pending === 0) done(null);
+          });
+      });
+    });
+
+    if (result) { linkCache[u] = result; return; }
 
     linkCache[u] = {
       ok: false, status: 0, text: "", json: null, title: "", at: Date.now(),
-      error: lastError + ". Check the link, or check that the phone is online.",
+      error: lastError + ". Some sites refuse to be read. Try an API link, or check the address.",
     };
   }
 
