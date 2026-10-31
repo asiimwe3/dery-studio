@@ -506,6 +506,14 @@
           continue;
         }
 
+        const getTitle = line.text.match(/^(?:get|read)\s+the\s+title\s+of\s+(?:the\s+)?(?:(?:link|page|url|web ?page)\s+)?(?:"([^"]+)"|(\S+))\s+(?:in ?to|as|inside)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\.?$/i);
+        if (getTitle) {
+          const urlText = getTitle[1] || getTitle[2];
+          stmts.push({ k: "fetchTitle", url: { k: "lit", v: urlText }, target: getTitle[3], line: line.n });
+          idx++;
+          continue;
+        }
+
         /* ── variables ───────────────────────────────────────────── */
         const assign = line.text.match(/^(?:remember that|remember|let|set|make|put)\s+([A-Za-z_][A-Za-z0-9_]*)\s+(?:is|are|to|be|equal to|as)\s+(.+?)\s*\.?$/i);
         if (assign) {
@@ -870,6 +878,13 @@
             rt.call(st.name, st.args.map((a3) => evalExpr(a3, scope, rt)), scope);
             break;
           }
+          case "fetchTitle": {
+            const url = String(evalExpr(st.url, scope, rt) || "");
+            const rec = links[url];
+            if (!rec || !rec.ok) { scope.set(st.target, ""); break; }
+            scope.set(st.target, rec.title || (rec.json ? String(rec.json.title || "") : ""));
+            break;
+          }
           case "fetch": {
             const url = String(evalExpr(st.url, scope, rt) || "");
             const rec = links[url];
@@ -878,7 +893,7 @@
               break;
             }
             if (!rec.ok) {
-              rt.error(`I could not open ${url}` + (rec.status ? ` (it answered ${rec.status})` : "") + `. ` + (rec.error || "Check the link and try again."));
+              rt.error(`I could not open ${url}. ` + (rec.error || "Check the link and try again."));
               break;
             }
             scope.set(st.target, rec.json !== null && rec.json !== undefined ? rec.json : rec.text);
@@ -929,24 +944,75 @@
     return Array.from(out);
   }
 
+  // Web pages usually refuse to be read by another site (that is the browser
+  // security rule called CORS). When that happens we ask a public reader
+  // service instead, so ordinary links still work.
+  const READERS = [
+    (u) => u,
+    (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+    (u) => "https://r.jina.ai/" + u,
+    (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+  ];
+
+  function htmlToText(html) {
+    const stripped = String(html)
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<!--[\s\S]*?-->/g, " ");
+    return stripped
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+      .replace(/\s+/g, " ").trim();
+  }
+
+  function pageTitle(html) {
+    const m = String(html).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    return m ? htmlToText(m[1]) : "";
+  }
+
+  async function prefetchOne(u) {
+    const hit = linkCache[u];
+    if (hit && Date.now() - hit.at < LINK_TTL) return;
+    let lastError = "no answer";
+    for (let k = 0; k < READERS.length; k++) {
+      const target = READERS[k](u);
+      try {
+        const r = await fetch(target, { headers: { Accept: "application/json, text/plain, text/html, */*" } });
+        if (!r.ok) { lastError = "it answered " + r.status; continue; }
+        let raw = await r.text();
+        if (!raw || !raw.trim()) { lastError = "it sent nothing back"; continue; }
+        // allorigins wraps JSON in {contents: "..."}; unwrap when present
+        if (/api\.allorigins\.win/.test(target)) {
+          try {
+            const wrap = JSON.parse(raw);
+            if (wrap && typeof wrap.contents === "string") raw = wrap.contents;
+          } catch (_) { /* not wrapped, keep as is */ }
+        }
+        let json = null;
+        try { json = JSON.parse(raw); } catch (_) { json = null; }
+        const isHtml = /^\s*<(!doctype|html)/i.test(raw) || /<html[\s>]/i.test(raw.slice(0, 400));
+        const text = isHtml ? htmlToText(raw) : raw;
+        linkCache[u] = {
+          ok: true, status: r.status, raw,
+          text, json, title: isHtml ? pageTitle(raw) : "",
+          via: k === 0 ? "direct" : "reader", at: Date.now(),
+        };
+        return;
+      } catch (err) {
+        lastError = err && err.message ? err.message : String(err);
+      }
+    }
+    linkCache[u] = {
+      ok: false, status: 0, text: "", json: null, at: Date.now(),
+      error: lastError + ". Check the link, or check that the phone is online.",
+    };
+  }
+
   async function prefetchLinks(src) {
     const urls = collectLinks(src);
-    await Promise.all(urls.map(async (u) => {
-      const hit = linkCache[u];
-      if (hit && Date.now() - hit.at < LINK_TTL) return;
-      try {
-        const r = await fetch(u, { headers: { Accept: "application/json, text/plain, */*" } });
-        const text = await r.text();
-        let json = null;
-        try { json = JSON.parse(text); } catch (_) { json = null; }
-        linkCache[u] = { ok: r.ok, status: r.status, text, json, at: Date.now() };
-      } catch (err) {
-        linkCache[u] = {
-          ok: false, status: 0, text: "", json: null, at: Date.now(),
-          error: err && err.message ? err.message : String(err),
-        };
-      }
-    }));
+    await Promise.all(urls.map(prefetchOne));
   }
 
   function countStatements(stmts) {
