@@ -305,6 +305,11 @@
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
+  window.addEventListener("error", (e) => {
+    const st = document.getElementById("stateText");
+    const ic = document.getElementById("stateIc");
+    if (st && ic && e && e.message) { ic.textContent = "!"; ic.className = "bad"; st.textContent = "Something broke: " + e.message; }
+  });
   const ed = $("editor"), gutter = $("gutter"), hl = $("hl"), ac = $("ac"), codeScroll = $("codeScroll");
   const STORE = "dery.files.v2";
   const isMobile = () => window.matchMedia("(max-width: 880px)").matches;
@@ -527,9 +532,30 @@
   let lastHtml = "", runTimer = null;
 
   function run() {
+    const btn = $("runBtn");
+    const label = btn.textContent;
+    btn.textContent = "Running...";
+    setTimeout(() => { btn.textContent = label; }, 400);
+
     const api = window.Dery;
-    if (!api) return;
-    const res = api.run(ed.value);
+    if (!api) {
+      $("stateIc").textContent = "!";
+      $("stateIc").className = "bad";
+      $("stateText").textContent = "The Dery engine did not load. Reload the page.";
+      return;
+    }
+    let res;
+    try {
+      res = api.run(ed.value);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      $("stateIc").textContent = "!";
+      $("stateIc").className = "bad";
+      $("stateText").textContent = "The run crashed: " + msg;
+      $("console").innerHTML = '<span class="empty">The run crashed: ' + esc(msg) + '</span>';
+      showView("out");
+      return;
+    }
     lastHtml = res.html || "";
     badLines = (res.errors || []).map((e) => e.line).filter(Boolean);
     $("site").srcdoc = lastHtml;
@@ -552,6 +578,11 @@
     $("statLines").textContent = out.length + " lines out";
     $("liveBadge").textContent = errs.length ? "check" : "live";
     paintGutter();
+
+    // always reveal the pane that actually has something to show
+    const hasPage = !!(res.page && res.page.blocks && res.page.blocks.length);
+    if (errs.length || out.length || !hasPage) showView("out");
+    else showView("site");
   }
 
   function onInput(immediate) {
@@ -651,7 +682,7 @@
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
 
   // ── run + save buttons ───────────────────────────────────────────────
-  $("runBtn").addEventListener("click", () => { hideAc(); run(); if (isMobile()) showView("site"); });
+  $("runBtn").addEventListener("click", () => { hideAc(); run(); });
   $("saveHtmlBtn").addEventListener("click", () => {
     run();
     const name = (activeFile().name || "site").replace(/\.dery$/i, "");

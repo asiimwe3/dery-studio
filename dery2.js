@@ -811,7 +811,15 @@
           case "give": return { give: evalExpr(st.expr, scope, rt) };
           case "foreach": {
             const seq = evalExpr(st.list, scope, rt);
-            const arr = Array.isArray(seq) ? seq : String(show(seq)).trim().split(/\s+/).filter(Boolean);
+            let arr;
+            if (Array.isArray(seq)) arr = seq;
+            else if (typeof seq === "string" && seq.trim()) {
+              arr = seq.trim().split(/\s*,\s*|\s+/).filter(Boolean);
+              rt.warn(`"${show(seq)}" is text, not a list, so I looped over its words. Make a real list with: Remember that names are a list of "A", "B".`);
+            } else {
+              rt.error(`I cannot loop over ${show(seq)} because it is not a list.`);
+              arr = [];
+            }
             for (let k = 0; k < arr.length; k++) {
               const inner = new Scope(scope);
               inner.declare(st.var, arr[k]);
@@ -840,10 +848,19 @@
     }
 
     const globals = new Scope(null);
-    exec(program, globals);
+    try {
+      exec(program, globals);
+    } catch (err) {
+      runtimeErrors.push({
+        message: "Your program stopped: " + (err && err.message ? err.message : String(err)),
+      });
+    }
+
+    let html = "";
+    try { html = render(page); } catch (err) { html = ""; }
 
     return {
-      html: render(page),
+      html,
       page,
       output,
       errors: errors.concat(runtimeErrors.map((e) => ({ line: 0, message: e.message, hint: "" }))),

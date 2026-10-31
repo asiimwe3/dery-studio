@@ -1114,7 +1114,15 @@
           case "give": return { give: evalExpr(st.expr, scope, rt) };
           case "foreach": {
             const seq = evalExpr(st.list, scope, rt);
-            const arr = Array.isArray(seq) ? seq : String(show(seq)).trim().split(/\s+/).filter(Boolean);
+            let arr;
+            if (Array.isArray(seq)) arr = seq;
+            else if (typeof seq === "string" && seq.trim()) {
+              arr = seq.trim().split(/\s*,\s*|\s+/).filter(Boolean);
+              rt.warn(`"${show(seq)}" is text, not a list, so I looped over its words. Make a real list with: Remember that names are a list of "A", "B".`);
+            } else {
+              rt.error(`I cannot loop over ${show(seq)} because it is not a list.`);
+              arr = [];
+            }
             for (let k = 0; k < arr.length; k++) {
               const inner = new Scope(scope);
               inner.declare(st.var, arr[k]);
@@ -1143,10 +1151,19 @@
     }
 
     const globals = new Scope(null);
-    exec(program, globals);
+    try {
+      exec(program, globals);
+    } catch (err) {
+      runtimeErrors.push({
+        message: "Your program stopped: " + (err && err.message ? err.message : String(err)),
+      });
+    }
+
+    let html = "";
+    try { html = render(page); } catch (err) { html = ""; }
 
     return {
-      html: render(page),
+      html,
       page,
       output,
       errors: errors.concat(runtimeErrors.map((e) => ({ line: 0, message: e.message, hint: "" }))),
@@ -1255,6 +1272,11 @@ ${blocks(rest, 1)}</main>
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
+  window.addEventListener("error", (e) => {
+    const st = document.getElementById("stateText");
+    const ic = document.getElementById("stateIc");
+    if (st && ic && e && e.message) { ic.textContent = "!"; ic.className = "bad"; st.textContent = "Something broke: " + e.message; }
+  });
   const ed = $("editor"), gutter = $("gutter"), hl = $("hl"), ac = $("ac"), codeScroll = $("codeScroll");
   const STORE = "dery.files.v2";
   const isMobile = () => window.matchMedia("(max-width: 880px)").matches;
@@ -1477,9 +1499,30 @@ ${blocks(rest, 1)}</main>
   let lastHtml = "", runTimer = null;
 
   function run() {
+    const btn = $("runBtn");
+    const label = btn.textContent;
+    btn.textContent = "Running...";
+    setTimeout(() => { btn.textContent = label; }, 400);
+
     const api = window.Dery;
-    if (!api) return;
-    const res = api.run(ed.value);
+    if (!api) {
+      $("stateIc").textContent = "!";
+      $("stateIc").className = "bad";
+      $("stateText").textContent = "The Dery engine did not load. Reload the page.";
+      return;
+    }
+    let res;
+    try {
+      res = api.run(ed.value);
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      $("stateIc").textContent = "!";
+      $("stateIc").className = "bad";
+      $("stateText").textContent = "The run crashed: " + msg;
+      $("console").innerHTML = '<span class="empty">The run crashed: ' + esc(msg) + '</span>';
+      showView("out");
+      return;
+    }
     lastHtml = res.html || "";
     badLines = (res.errors || []).map((e) => e.line).filter(Boolean);
     $("site").srcdoc = lastHtml;
@@ -1502,6 +1545,11 @@ ${blocks(rest, 1)}</main>
     $("statLines").textContent = out.length + " lines out";
     $("liveBadge").textContent = errs.length ? "check" : "live";
     paintGutter();
+
+    // always reveal the pane that actually has something to show
+    const hasPage = !!(res.page && res.page.blocks && res.page.blocks.length);
+    if (errs.length || out.length || !hasPage) showView("out");
+    else showView("site");
   }
 
   function onInput(immediate) {
@@ -1601,7 +1649,7 @@ ${blocks(rest, 1)}</main>
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
 
   // ── run + save buttons ───────────────────────────────────────────────
-  $("runBtn").addEventListener("click", () => { hideAc(); run(); if (isMobile()) showView("site"); });
+  $("runBtn").addEventListener("click", () => { hideAc(); run(); });
   $("saveHtmlBtn").addEventListener("click", () => {
     run();
     const name = (activeFile().name || "site").replace(/\.dery$/i, "");
