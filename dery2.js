@@ -1084,7 +1084,12 @@
       });
     });
 
-    if (result) { linkCache[u] = result; return; }
+    if (result) {
+      const thin = (result.text || "").length < 400 &&
+        /just a moment|enable javascript|checking your browser|attention required|access denied|captcha/i.test(result.text || "");
+      if (!thin) { linkCache[u] = result; return; }
+      lastError = "that site is protected by a security check";
+    }
 
     const why = target.blocked
       ? "Google blocks programs from reading it. Use a search link like \"https://www.google.com/search?q=uganda news\" (that gets answered through Bing), or another site."
