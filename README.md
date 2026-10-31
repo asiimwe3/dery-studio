@@ -1,31 +1,33 @@
 # Dery Studio
 
-Write a website in plain English. No syntax, no brackets, no semicolons.
+Write a website and real programs in plain English. No syntax.
 
-**Live editor:** https://asiimwe3.github.io/dery-studio/
-
-Example:
-
-```
-Create a website called "Peters Medicare".
-Add a big heading that says "Healthcare you can trust".
-Add a paragraph that says "Walk in any day from 8 in the morning."
-Add a button that says "Call us" linking to "tel:+256700000000".
-Add a contact form.
-Make the background color dark.
-Set the text color to white.
-Make the buttons orange.
-```
+**Live:** https://asiimwe3.github.io/dery-studio/
 
 ## Files
 
-- `index.html` — the IDE (editor + live preview, single file, no dependencies)
-- `deryweb.js` — the English to HTML compiler (browser + Node)
-- `example.english` — a full sample program
+- `index.html` — app shell
+- `app.js` — the editor (highlighting, autocomplete, files, terminal)
+- `dery2.js` — the Dery language (parser + interpreter)
+- `build.sh` — bumps the asset version so devices never keep a stale copy
+- `deryc.c` — standalone C compiler for the original Dery interpreter
 
-## Run without the IDE
+## Deploy
 
 ```
-node -e 'const {compile}=require("./deryweb.js"); const fs=require("fs");
-const r=compile(fs.readFileSync("example.english","utf8")); fs.writeFileSync("out.html", r.html);'
+./build.sh && git add -A && git commit -m "update" && git push
 ```
+
+## Language
+
+```
+Remember that price is 5000.
+Show "Total: " plus price times 2.
+
+Get the link "https://api.open-meteo.com/v1/forecast?latitude=0.65&longitude=30.28&current_weather=true" into w.
+Show the value of "temperature" in the value of "current_weather" in w.
+
+Add a heading that says "Live weather in Fort Portal".
+```
+
+Full reference inside the app: the "How to write" button.
