@@ -1022,14 +1022,30 @@
     return { ok: true, status: r.status, raw, text, json, title, via: reader.name, at: Date.now() };
   }
 
+  // Google refuses to be read by programs. If the link is a Google search,
+  // the same search is asked of Bing, which does answer.
+  function readingTarget(u) {
+    try {
+      const url = new URL(u);
+      if (/(^|\.)google\./i.test(url.hostname)) {
+        const q = url.searchParams.get("q");
+        if (q) return { url: "https://www.bing.com/search?q=" + encodeURIComponent(q), swapped: true };
+        return { url: u, swapped: false, blocked: true };
+      }
+    } catch (_) { /* not a full url */ }
+    return { url: u, swapped: false };
+  }
+
   async function prefetchOne(u) {
     const hit = linkCache[u];
     if (hit && Date.now() - hit.at < LINK_TTL) return;
     let lastError = "no answer";
+    const target = readingTarget(u);
+    const fetchUrl = target.url;
 
     // 1. straight to the link: instant when the site allows it (APIs)
     try {
-      const r = await fetchWithTimeout(u, 6000);
+      const r = await fetchWithTimeout(fetchUrl, 6000);
       if (r.ok) {
         let raw = await r.text();
         if (raw && raw.trim()) {
@@ -1058,7 +1074,7 @@
       let pending = 2, settled = false;
       const done = (val) => { if (!settled) { settled = true; resolve(val); } };
       [READER_A, READER_B].forEach((reader) => {
-        readThrough(reader, u)
+        readThrough(reader, fetchUrl)
           .then((rec) => done(rec))
           .catch((err) => {
             lastError = err && err.name === "AbortError" ? "it took too long" : (err && err.message ? err.message : String(err));
@@ -1070,9 +1086,11 @@
 
     if (result) { linkCache[u] = result; return; }
 
+    const why = target.blocked
+      ? "Google blocks programs from reading it. Use a search link like \"https://www.google.com/search?q=uganda news\" (that gets answered through Bing), or another site."
+      : lastError + ". Some sites refuse to be read. Try an API link, or check the address.";
     linkCache[u] = {
-      ok: false, status: 0, text: "", json: null, title: "", at: Date.now(),
-      error: lastError + ". Some sites refuse to be read. Try an API link, or check the address.",
+      ok: false, status: 0, text: "", json: null, title: "", at: Date.now(), error: why,
     };
   }
 
