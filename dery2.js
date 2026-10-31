@@ -948,10 +948,9 @@
   // security rule called CORS). When that happens we ask a public reader
   // service instead, so ordinary links still work.
   const READERS = [
-    (u) => u,
-    (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-    (u) => "https://r.jina.ai/" + u,
-    (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+    { name: "direct", url: (u) => u, ms: 8000 },
+    { name: "reader", url: (u) => "https://r.jina.ai/" + u, ms: 15000 },
+    { name: "mirror", url: (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u), ms: 12000 },
   ];
 
   function htmlToText(html) {
@@ -972,40 +971,71 @@
     return m ? htmlToText(m[1]) : "";
   }
 
+  async function fetchWithTimeout(u, ms) {
+    const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), ms) : null;
+    try {
+      return await fetch(u, {
+        headers: { Accept: "application/json, text/plain, text/html, */*" },
+        signal: ctl ? ctl.signal : undefined,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async function prefetchOne(u) {
     const hit = linkCache[u];
     if (hit && Date.now() - hit.at < LINK_TTL) return;
     let lastError = "no answer";
+
     for (let k = 0; k < READERS.length; k++) {
-      const target = READERS[k](u);
+      const reader = READERS[k];
       try {
-        const r = await fetch(target, { headers: { Accept: "application/json, text/plain, text/html, */*" } });
+        const r = await fetchWithTimeout(reader.url(u), reader.ms);
         if (!r.ok) { lastError = "it answered " + r.status; continue; }
         let raw = await r.text();
         if (!raw || !raw.trim()) { lastError = "it sent nothing back"; continue; }
-        // allorigins wraps JSON in {contents: "..."}; unwrap when present
-        if (/api\.allorigins\.win/.test(target)) {
+
+        if (reader.name === "mirror") {
           try {
             const wrap = JSON.parse(raw);
             if (wrap && typeof wrap.contents === "string") raw = wrap.contents;
-          } catch (_) { /* not wrapped, keep as is */ }
+          } catch (_) { /* not wrapped */ }
         }
+
+        let text = raw;
+        let title = "";
+        if (reader.name === "reader") {
+          // the reader service answers with a short header, then the page text
+          const tm = raw.match(/^\s*Title:\s*(.+)$/m);
+          if (tm) title = tm[1].trim();
+          const cut = raw.indexOf("Markdown Content:");
+          text = cut >= 0 ? raw.slice(cut + "Markdown Content:".length) : raw;
+          text = text
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+            .replace(/^#{1,6}\s*/gm, "")
+            .replace(/[*_`>]+/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        } else if (/^\s*<(!doctype|html)/i.test(raw) || /<html[\s>]/i.test(raw.slice(0, 400))) {
+          text = htmlToText(raw);
+          title = pageTitle(raw);
+        }
+
         let json = null;
         try { json = JSON.parse(raw); } catch (_) { json = null; }
-        const isHtml = /^\s*<(!doctype|html)/i.test(raw) || /<html[\s>]/i.test(raw.slice(0, 400));
-        const text = isHtml ? htmlToText(raw) : raw;
-        linkCache[u] = {
-          ok: true, status: r.status, raw,
-          text, json, title: isHtml ? pageTitle(raw) : "",
-          via: k === 0 ? "direct" : "reader", at: Date.now(),
-        };
+
+        linkCache[u] = { ok: true, status: r.status, raw, text, json, title, via: reader.name, at: Date.now() };
         return;
       } catch (err) {
-        lastError = err && err.message ? err.message : String(err);
+        lastError = err && err.name === "AbortError" ? "it took too long" : (err && err.message ? err.message : String(err));
       }
     }
+
     linkCache[u] = {
-      ok: false, status: 0, text: "", json: null, at: Date.now(),
+      ok: false, status: 0, text: "", json: null, title: "", at: Date.now(),
       error: lastError + ". Check the link, or check that the phone is online.",
     };
   }
