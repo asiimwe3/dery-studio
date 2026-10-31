@@ -1,0 +1,20 @@
+# A DeryCode website, written in plain English
+Create a website called "Peters Medicare".
+
+Add a navigation bar with "Home", "Services", "Doctors", "Contact".
+
+Add a big heading that says "Healthcare you can trust in Kyenjojo".
+Add a paragraph that says "Walk in any day. Our doctors are here from 8 in the morning."
+
+Add a button that says "Call us now" linking to "tel:+256700000000".
+Add a list with "General treatment", "Maternity care", "Laboratory tests", "Pharmacy".
+
+Add a section called "Book an appointment".
+Add a contact form.
+End the section.
+
+Add a footer that says "Peters Medicare, Kyenjojo, Uganda".
+Make the background color dark.
+Set the text color to white.
+Make the buttons orange.
+Center everything.

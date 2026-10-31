@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dery Studio — write websites in English</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23000'/%3E%3Ctext x='50' y='70' font-size='54' font-family='sans-serif' font-weight='800' fill='%23FF8A00' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E" />
+<style>
+  :root {
+    --bg:#07090F; --panel:#0E131C; --panel2:#131A25; --line:rgba(255,255,255,0.09);
+    --text:#EDF2FF; --muted:rgba(237,242,255,0.55); --accent:#FF8A00; --accent2:#FFB340;
+    --green:#16A34A; --red:#F05252; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+  }
+  header {
+    display:flex; align-items:center; gap:10px; padding:10px 14px;
+    border-bottom:1px solid var(--line); background:var(--panel); flex-shrink:0;
+  }
+  .logo { width:30px; height:30px; border-radius:9px; background:#000; display:grid; place-items:center;
+    color:var(--accent); font-weight:900; font-size:17px; border:1px solid rgba(255,138,0,0.35); }
+  .brand { font-size:14.5px; font-weight:800; letter-spacing:-0.02em; }
+  .brand span { color:var(--accent); }
+  .spacer { flex:1; }
+  .btn {
+    border:1px solid var(--line); background:var(--panel2); color:var(--text);
+    padding:8px 13px; border-radius:9px; font-size:12.5px; font-weight:700; cursor:pointer;
+    white-space:nowrap; transition:transform .12s, background .15s, border-color .15s;
+  }
+  .btn:active { transform:scale(.96); }
+  .btn.primary { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#1a1200; border:none; }
+  main { flex:1; display:flex; min-height:0; }
+  .pane { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  #left { flex:1 1 46%; border-right:1px solid var(--line); }
+  #right { flex:1 1 54%; background:#fff; }
+  .pane-head {
+    display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:11px; font-weight:800;
+    letter-spacing:.07em; text-transform:uppercase; color:var(--muted);
+    background:var(--panel); border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  .editor-wrap { flex:1; display:flex; min-height:0; background:#0A0E15; }
+  #gutter {
+    padding:14px 6px 14px 12px; font-family:var(--mono); font-size:13px; line-height:1.62;
+    color:rgba(237,242,255,0.25); text-align:right; user-select:none; overflow:hidden;
+    background:#0A0E15; min-width:38px;
+  }
+  #editor {
+    flex:1; border:none; outline:none; resize:none; background:transparent; color:#E8EEFB;
+    font-family:var(--mono); font-size:13px; line-height:1.62; padding:14px 12px 14px 4px;
+    tab-size:2; white-space:pre; overflow:auto;
+  }
+  #editor::placeholder { color:rgba(237,242,255,0.25); }
+  #errors {
+    flex-shrink:0; max-height:34%; overflow:auto; border-top:1px solid var(--line);
+    background:#0B0F16; padding:0;
+  }
+  #errors:empty { display:none; }
+  .err { display:flex; gap:9px; padding:9px 12px; border-bottom:1px solid rgba(255,255,255,0.05); font-size:12.5px; }
+  .err .n { color:var(--red); font-weight:900; font-family:var(--mono); flex-shrink:0; }
+  .err .msg { color:#FFC9C9; font-weight:600; }
+  .err .hint { color:var(--muted); font-size:11.5px; margin-top:2px; }
+  .ok { display:flex; align-items:center; gap:8px; padding:9px 12px; font-size:12.5px; color:#8CE99A; font-weight:700; }
+  #preview { flex:1; width:100%; border:none; background:#fff; }
+  .status {
+    padding:6px 12px; font-size:11.5px; color:var(--muted); background:var(--panel);
+    border-top:1px solid var(--line); display:flex; gap:14px; align-items:center; flex-shrink:0;
+  }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--green); display:inline-block; margin-right:6px; }
+  .dot.bad { background:var(--red); }
+  /* mobile: stack panes with a tab switch */
+  .tabs { display:none; }
+  @media (max-width:820px) {
+    main { flex-direction:column; }
+    #left, #right { flex:1 1 auto; border-right:none; }
+    #right { border-top:1px solid var(--line); }
+    .tabs { display:flex; gap:6px; padding:6px 10px; background:var(--panel); border-bottom:1px solid var(--line); }
+    .tabs button { flex:1; }
+    .pane.hide-mobile { display:none; }
+    #errors { max-height:28%; }
+  }
+  /* help drawer */
+  #help {
+    position:fixed; inset:0; background:rgba(3,5,9,0.72); backdrop-filter:blur(4px);
+    display:none; align-items:flex-end; justify-content:center; z-index:50;
+  }
+  #help.open { display:flex; }
+  #help .sheet {
+    background:var(--panel); width:100%; max-width:640px; max-height:82dvh; overflow:auto;
+    border-radius:18px 18px 0 0; border-top:1px solid rgba(255,138,0,0.35); padding:18px 18px 26px;
+  }
+  #help h3 { margin:0 0 4px; font-size:16px; }
+  #help p.lead { margin:0 0 14px; font-size:12.5px; color:var(--muted); }
+  #help .row { display:flex; gap:10px; padding:9px 0; border-bottom:1px solid rgba(255,255,255,0.06); }
+  #help code {
+    font-family:var(--mono); font-size:11.5px; color:var(--accent2); flex:1 1 60%;
+    word-break:break-word;
+  }
+  #help .mean { flex:1 1 40%; font-size:11.5px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">T</div>
+  <div class="brand">Dery <span>Studio</span></div>
+  <div class="spacer"></div>
+  <button class="btn" id="helpBtn">How to write</button>
+  <button class="btn" id="dlBtn">Save HTML</button>
+  <button class="btn primary" id="runBtn">▶ Run</button>
+</header>
+
+<div class="tabs">
+  <button class="btn" id="tabCode">English</button>
+  <button class="btn" id="tabWeb">Website</button>
+</div>
+
+<main>
+  <div class="pane" id="left">
+    <div class="pane-head">Write in plain English</div>
+    <div class="editor-wrap">
+      <div id="gutter">1</div>
+      <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+    </div>
+    <div id="errors"></div>
+  </div>
+  <div class="pane" id="right">
+    <div class="pane-head">Your website <span id="size" style="text-transform:none;letter-spacing:0"></span></div>
+    <iframe id="preview" title="Website preview"></iframe>
+  </div>
+</main>
+
+<div class="status" id="status">
+  <span><span class="dot" id="dot"></span><span id="stateText">Ready</span></span>
+  <span id="counts"></span>
+</div>
+
+<div id="help">
+  <div class="sheet">
+    <h3>Write like you talk</h3>
+    <p class="lead">Every line is a normal English sentence. End with a full stop. Quotes hold your own words.</p>
+    <div id="helpRows"></div>
+  </div>
+</div>
+
+<script src="deryweb.js"></script>
+<script>
+(function () {
+  const editor = document.getElementById("editor");
+  const gutter = document.getElementById("gutter");
+  const preview = document.getElementById("preview");
+  const errorsBox = document.getElementById("errors");
+  const stateText = document.getElementById("stateText");
+  const dot = document.getElementById("dot");
+  const counts = document.getElementById("counts");
+  const size = document.getElementById("size");
+
+  const STARTER = `# Write plain English. One sentence per line.
+Create a website called "My Business".
+
+Add a navigation bar with "Home", "Services", "Contact".
+
+Add a big heading that says "Welcome to my business".
+Add a paragraph that says "We serve customers in Kyenjojo and beyond."
+
+Add a button that says "Call us" linking to "tel:+256700000000".
+Add a list with "What we do", "Where we are", "How to reach us".
+
+Add a section called "Get in touch".
+Add a contact form.
+End the section.
+
+Add a footer that says "Built with Dery Studio".
+Make the background color dark.
+Set the text color to white.
+Make the buttons orange.
+Center everything.`;
+
+  const HELP = [
+    ['Create a website called "Name"', 'sets the page title'],
+    ['Add a navigation bar with "Home", "About"', 'menu links'],
+    ['Add a big heading that says "Text"', 'page heading'],
+    ['Add a heading that says "Text"', 'smaller heading'],
+    ['Add a paragraph that says "Text"', 'body text'],
+    ['Add a button that says "Call us" linking to "tel:..."', 'button'],
+    ['Add a list with "One", "Two"', 'bullet list (say "numbered list" for 1,2,3)'],
+    ['Add an image showing "https://..."', 'picture'],
+    ['Add a section called "Title" ... End the section', 'group of content'],
+    ['Add a contact form', 'name, phone, message form'],
+    ['Add a footer that says "Text"', 'bottom line'],
+    ['Add a divider', 'horizontal line'],
+    ['Make the background color dark', 'also light, navy, blue, or "#123456"'],
+    ['Set the text color to white', 'body text colour'],
+    ['Make the buttons orange', 'accent colour'],
+    ['Use the font "Georgia"', 'typeface'],
+    ['Center everything', 'centre-align the page'],
+    ['Make it wide', 'wider layout'],
+  ];
+
+  document.getElementById("helpRows").innerHTML = HELP.map(
+    (h) => `<div class="row"><code>${h[0].replace(/</g, "&lt;")}</code><div class="mean">${h[1]}</div></div>`
+  ).join("");
+
+  document.getElementById("helpBtn").onclick = () => document.getElementById("help").classList.add("open");
+  document.getElementById("help").onclick = (e) => {
+    if (e.target.id === "help") document.getElementById("help").classList.remove("open");
+  };
+
+  // restore last session
+  const saved = localStorage.getItem("dery.studio.source");
+  editor.value = saved || STARTER;
+
+  function syncGutter() {
+    const n = editor.value.split("\n").length;
+    let out = "";
+    for (let i = 1; i <= Math.max(n, 12); i++) out += i + "\n";
+    gutter.textContent = out;
+    gutter.scrollTop = editor.scrollTop;
+  }
+
+  function run() {
+    const src = editor.value;
+    localStorage.setItem("dery.studio.source", src);
+    const result = window.DeryWeb.compile(src);
+    preview.srcdoc = result.html;
+
+    const lineCount = src.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#")).length;
+    counts.textContent = `${lineCount} sentences · ${Math.round(result.html.length / 1024 * 10) / 10} KB`;
+    size.textContent = "· live";
+
+    if (result.errors.length === 0) {
+      errorsBox.innerHTML = `<div class="ok">✓ Every sentence understood. ${lineCount} instructions compiled.</div>`;
+      stateText.textContent = "Compiled";
+      dot.className = "dot";
+    } else {
+      errorsBox.innerHTML = result.errors
+        .map(
+          (e) =>
+            `<div class="err"><span class="n">${e.line}</span><div><div class="msg">${e.message.replace(/</g, "&lt;")}</div><div class="hint">${e.hint}</div></div></div>`
+        )
+        .join("");
+      stateText.textContent = `${result.errors.length} line${result.errors.length === 1 ? "" : "s"} to fix`;
+      dot.className = "dot bad";
+    }
+  }
+
+  editor.addEventListener("input", syncGutter);
+  editor.addEventListener("scroll", () => (gutter.scrollTop = editor.scrollTop));
+  editor.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const s = editor.selectionStart;
+      editor.value = editor.value.slice(0, s) + "  " + editor.value.slice(editor.selectionEnd);
+      editor.selectionStart = editor.selectionEnd = s + 2;
+      syncGutter();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      run();
+    }
+  });
+
+  document.getElementById("runBtn").onclick = run;
+
+  document.getElementById("dlBtn").onclick = () => {
+    const result = window.DeryWeb.compile(editor.value);
+    const blob = new Blob([result.html], { type: "text/html" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    const name = (result.page.title || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    a.download = name + ".html";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  // mobile tab switching
+  const left = document.getElementById("left");
+  const right = document.getElementById("right");
+  document.getElementById("tabCode").onclick = () => {
+    left.classList.remove("hide-mobile");
+    right.classList.add("hide-mobile");
+  };
+  document.getElementById("tabWeb").onclick = () => {
+    right.classList.remove("hide-mobile");
+    left.classList.add("hide-mobile");
+  };
+  if (window.matchMedia("(max-width:820px)").matches) {
+    right.classList.add("hide-mobile");
+  }
+
+  syncGutter();
+  run();
+})();
+</script>
+</body>
+</html>
