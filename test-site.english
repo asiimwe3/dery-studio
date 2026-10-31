@@ -1,0 +1,19 @@
+Create a website called "Kyenjojo Phones".
+Add a navigation bar with "Home", "Phones", "Contact".
+Add a big heading that says "Phone repairs in Kyenjojo".
+Add a paragraph that says "We fix phones the same day. Bring yours.".
+
+Remember that price is 25000.
+Add a heading that says "Our price".
+Add a paragraph that says "Screen replacement costs " plus price plus " shillings.".
+
+Repeat 3 times:
+  Add a paragraph that says "Technician " plus it plus " is on duty today.".
+End the repeat.
+
+Add a button that says "Call us" linking to "tel:+256700000000".
+Add a footer that says "Kyenjojo, Uganda".
+Make the background color dark.
+Set the text color to white.
+Make the buttons orange.
+Center everything.

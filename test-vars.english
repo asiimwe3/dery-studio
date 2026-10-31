@@ -1,0 +1,46 @@
+# variables, maths, text
+Remember that price is 5000.
+Remember that quantity is 3.
+Remember that total is price times quantity.
+Show "Total: " plus total.
+
+Add 500 to total.
+Show "After delivery: " plus total.
+Multiply total by 2.
+Show total.
+Divide total by 4.
+Show total.
+
+let name be "Derick".
+Show "Hello, " plus name.
+
+# conditions
+If total is more than 1000 then show "expensive".
+If total is less than 10 then show "cheap".
+
+If total is more than 1000:
+  Show "over a thousand".
+  Show "adding tax".
+  Add 100 to total.
+Otherwise:
+  Show "small amount".
+End the if.
+Show "final: " plus total.
+
+# loops
+Repeat 3 times:
+  Show "round " plus it.
+End the repeat.
+
+Remember that counter is 0.
+While counter is less than 4:
+  Add 1 to counter.
+  Show "counter is " plus counter.
+End the while.
+
+# functions
+Make a function called greet that takes person:
+  Show "Oraire ota, " plus person plus "!".
+End the function.
+Call greet with "Tooro".
+Call greet with name.
