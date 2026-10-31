@@ -33,7 +33,21 @@
     if (v === null || v === undefined) return "nothing";
     if (v === true) return "yes";
     if (v === false) return "no";
+    if (Array.isArray(v)) return v.map(show).join(", ");
     return String(v);
+  };
+  // split `"a", "b", c` on commas that sit outside quotes
+  const splitTop = (src) => {
+    const out = [];
+    let buf = "", inq = false;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (c === '"') { inq = !inq; buf += c; continue; }
+      if (!inq && c === ",") { out.push(buf); buf = ""; continue; }
+      buf += c;
+    }
+    out.push(buf);
+    return out.map((x) => x.trim()).filter(Boolean);
   };
   const num = (v) => {
     if (typeof v === "number") return v;
@@ -98,6 +112,7 @@
         const w = matchWords(
           "is more than", "is greater than", "is bigger than", "is above", "is over",
           "is less than", "is smaller than", "is below", "is under",
+          "does not contain", "doesn't contain", "contains",
           "is at least", "is at most", "is not", "is exactly", "is equal to", "is", "equals", "equal to"
         );
         if (!w) return left;
@@ -107,6 +122,8 @@
         else if (/less than|smaller than|below|under/.test(w)) op = "<";
         else if (/at least/.test(w)) op = ">=";
         else if (/at most/.test(w)) op = "<=";
+        else if (/does ?n.t contain/.test(w)) op = "ncontains";
+        else if (/\bcontains\b/.test(w)) op = "contains";
         else if (/not/.test(w)) op = "!=";
         left = { k: "bin", op, a: left, b: right };
       }
@@ -144,6 +161,46 @@
         return e;
       }
       if (tk.t === "word") {
+        // W(0) is the current word, W(1) the one after it
+        const W = (n) => { const t = toks[i + n]; return t && t.t === "word" ? t.v.toLowerCase() : null; };
+        const take = (n) => { i += n; };
+
+        if (W(0) === "the" && W(1) === "result" && W(2) === "of") {
+          take(3);
+          const nt = peek();
+          if (!nt || nt.t !== "word") return { k: "lit", v: null };
+          const fname = nt.v; next();
+          const fargs = [];
+          if (W(0) === "with" || W(0) === "of" || W(0) === "using") {
+            take(1);
+            for (;;) {
+              fargs.push(parseAtom());
+              if (W(0) === "and") { take(1); continue; }
+              break;
+            }
+          }
+          return { k: "fcall", name: fname, args: fargs };
+        }
+        if (W(0) === "length" && W(1) === "of") { take(2); return { k: "len", a: parseAtom() }; }
+        if (W(0) === "number" && W(1) === "of" && (W(2) === "items" || W(2) === "letters" || W(2) === "characters" || W(2) === "words")) {
+          const which = W(2);
+          take(4);
+          return which === "words" ? { k: "words", a: parseAtom() } : { k: "len", a: parseAtom() };
+        }
+        if (W(0) === "uppercase" && W(1) === "of") { take(2); return { k: "upper", a: parseAtom() }; }
+        if (W(0) === "lowercase" && W(1) === "of") { take(2); return { k: "lower", a: parseAtom() }; }
+        if (W(0) === "first" && W(1) === "word" && W(2) === "of") { take(3); return { k: "firstword", a: parseAtom() }; }
+        if (W(0) === "last" && W(1) === "word" && W(2) === "of") { take(3); return { k: "lastword", a: parseAtom() }; }
+        if (W(0) === "first" && W(1) === "item" && W(2) === "of") { take(3); return { k: "firstitem", a: parseAtom() }; }
+        if (W(0) === "last" && W(1) === "item" && W(2) === "of") { take(3); return { k: "lastitem", a: parseAtom() }; }
+        if (W(0) === "reverse" && W(1) === "of") { take(2); return { k: "reverse", a: parseAtom() }; }
+        if (W(0) === "trimmed") { take(1); return { k: "trim", a: parseAtom() }; }
+        if (W(0) === "round") { take(1); return { k: "round", a: parseAtom() }; }
+        if (W(0) === "item") {
+          if (W(1) === "of") { take(2); return { k: "firstitem", a: parseAtom() }; }
+          const nt2 = toks[i + 1];
+          if (nt2 && nt2.t === "num" && W(2) === "of") { const nIdx = nt2.v; take(3); return { k: "atitem", a: parseAtom(), idx: nIdx }; }
+        }
         next();
         const low = tk.v.toLowerCase();
         if (low === "it" && i > 0) return { k: "var", name: "it" };
@@ -192,6 +249,40 @@
     if (!node) return null;
     switch (node.k) {
       case "lit": return node.v;
+      case "listlit": return node.items.map((it) => evalExpr(it, scope, rt));
+      case "len": {
+        const v = evalExpr(node.a, scope, rt);
+        return Array.isArray(v) ? v.length : String(show(v)).length;
+      }
+      case "words": return String(show(evalExpr(node.a, scope, rt))).trim().split(/\s+/).filter(Boolean).length;
+      case "upper": return String(show(evalExpr(node.a, scope, rt))).toUpperCase();
+      case "lower": return String(show(evalExpr(node.a, scope, rt))).toLowerCase();
+      case "trim": return String(show(evalExpr(node.a, scope, rt))).trim();
+      case "round": return Math.round(num(evalExpr(node.a, scope, rt)));
+      case "firstword": return String(show(evalExpr(node.a, scope, rt))).trim().split(/\s+/)[0] || "";
+      case "lastword": {
+        const w2 = String(show(evalExpr(node.a, scope, rt))).trim().split(/\s+/);
+        return w2[w2.length - 1] || "";
+      }
+      case "reverse": {
+        const rv = evalExpr(node.a, scope, rt);
+        return Array.isArray(rv) ? rv.slice().reverse() : String(show(rv)).split("").reverse().join("");
+      }
+      case "firstitem": {
+        const fi = evalExpr(node.a, scope, rt);
+        return Array.isArray(fi) ? fi[0] : String(show(fi)).trim().split(/\s+/)[0];
+      }
+      case "lastitem": {
+        const li = evalExpr(node.a, scope, rt);
+        if (Array.isArray(li)) return li[li.length - 1];
+        const wl = String(show(li)).trim().split(/\s+/);
+        return wl[wl.length - 1];
+      }
+      case "atitem": {
+        const ai = evalExpr(node.a, scope, rt);
+        return Array.isArray(ai) ? ai[Math.round(node.idx) - 1] : null;
+      }
+      case "fcall": return rt.call ? rt.call(node.name, node.args.map((ax) => evalExpr(ax, scope, rt)), scope) : null;
       case "var": {
         const name = node.name;
         if (scope.has(name)) return scope.get(name);
@@ -236,6 +327,8 @@
             if (typeof a === "string" || typeof b === "string") return show(a) !== show(b);
             return num(a) !== num(b);
           }
+          case "contains": return show(a).toLowerCase().includes(show(b).toLowerCase());
+          case "ncontains": return !show(a).toLowerCase().includes(show(b).toLowerCase());
           default: return null;
         }
       }
@@ -311,6 +404,15 @@
           continue;
         }
 
+        /* ── repeat for each NAME in LIST ────────────────────────── */
+        const each = line.text.match(/^(?:repeat\s+)?for\s+each\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+(.+?)\s*:?$/i);
+        if (each) {
+          idx++;
+          const body = parseBlock();
+          stmts.push({ k: "foreach", var: each[1], list: parseExpr(each[2]), body: body.stmts, line: line.n });
+          continue;
+        }
+
         /* ── repeat N times ──────────────────────────────────────── */
         const rep = low.match(/^repeat\s+(.+?)\s+times?\b/);
         if (rep) {
@@ -359,10 +461,33 @@
           continue;
         }
 
+        /* ── put something at the end of a list ──────────────────── */
+        const listAdd = line.text.match(/^(?:put|add|append)\s+(.+?)\s+(?:at\s+the\s+end\s+of|to\s+the\s+end\s+of|to\s+the\s+list|into\s+the\s+list|in)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\.?$/i);
+        if (listAdd && !/^\s*\d/.test(listAdd[1])) {
+          stmts.push({ k: "listadd", name: listAdd[2], expr: parseExpr(listAdd[1]), line: line.n });
+          idx++;
+          continue;
+        }
+
+        /* ── give a value back out of a function ─────────────────── */
+        const give = line.text.match(/^(?:give\s+back|return|send\s+back)\s+(.+?)\s*\.?$/i);
+        if (give) {
+          stmts.push({ k: "give", expr: parseExpr(give[1].replace(/\.$/, "")), line: line.n });
+          idx++;
+          continue;
+        }
+
         /* ── variables ───────────────────────────────────────────── */
-        const assign = line.text.match(/^(?:remember that|remember|let|set|make|put)\s+([A-Za-z_][A-Za-z0-9_]*)\s+(?:is|to|be|equal to|as)\s+(.+?)\s*\.?$/i);
+        const assign = line.text.match(/^(?:remember that|remember|let|set|make|put)\s+([A-Za-z_][A-Za-z0-9_]*)\s+(?:is|are|to|be|equal to|as)\s+(.+?)\s*\.?$/i);
         if (assign) {
           const rawExpr = assign[2].replace(/\.$/, "").trim();
+          const lm = rawExpr.match(/^(?:a|an|the)?\s*(?:list|group|set)\s+of\s+(.+)$/i);
+          if (lm) {
+            const items = splitTop(lm[1]).map((x) => parseExpr(x));
+            stmts.push({ k: "assign", name: assign[1], expr: { k: "listlit", items }, line: line.n });
+            idx++;
+            continue;
+          }
           // "add N to X" style is handled below; here plain assignment
           stmts.push({ k: "assign", name: assign[1], expr: parseExpr(rawExpr), line: line.n });
           idx++;
@@ -563,9 +688,20 @@
     let sectionDepth = 0;
     let sectionStack = [];
 
+    let callDepth = 0;
     const rt = {
       warn(msg) { runtimeErrors.push({ message: msg }); },
       error(msg) { runtimeErrors.push({ message: msg }); },
+      call(name, args, callerScope) {
+        const f = funcs[String(name).toLowerCase()];
+        if (!f) { rt.error(`There is no function called "${name}".`); return null; }
+        if (++callDepth > 300) { rt.error("This function called itself too many times."); callDepth--; return null; }
+        const inner = new Scope(callerScope);
+        f.params.forEach((p, k) => inner.declare(p, args[k]));
+        const r = exec(f.body, inner);
+        callDepth--;
+        return r && ("give" in r) ? r.give : null;
+      },
     };
 
     function targetBlocks() {
@@ -672,12 +808,28 @@
             break;
           }
           case "func": funcs[st.name.toLowerCase()] = st; break;
+          case "give": return { give: evalExpr(st.expr, scope, rt) };
+          case "foreach": {
+            const seq = evalExpr(st.list, scope, rt);
+            const arr = Array.isArray(seq) ? seq : String(show(seq)).trim().split(/\s+/).filter(Boolean);
+            for (let k = 0; k < arr.length; k++) {
+              const inner = new Scope(scope);
+              inner.declare(st.var, arr[k]);
+              inner.declare("it", arr[k]);
+              const r = exec(st.body, inner);
+              if (r && r.brk) return r;
+            }
+            break;
+          }
+          case "listadd": {
+            const cur2 = scope.has(st.name) ? scope.get(st.name) : [];
+            const arr2 = Array.isArray(cur2) ? cur2 : [cur2];
+            arr2.push(evalExpr(st.expr, scope, rt));
+            scope.set(st.name, arr2);
+            break;
+          }
           case "call": {
-            const f = funcs[st.name.toLowerCase()];
-            if (!f) { rt.error(`There is no function called "${st.name}".`); break; }
-            const inner = new Scope(scope);
-            f.params.forEach((p, i) => inner.declare(p, evalExpr(st.args[i], scope, rt)));
-            exec(f.body, inner);
+            rt.call(st.name, st.args.map((a3) => evalExpr(a3, scope, rt)), scope);
             break;
           }
           case "page": applyPage(st.page, scope); break;

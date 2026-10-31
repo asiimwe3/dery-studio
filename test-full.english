@@ -1,0 +1,45 @@
+# ── strings ─────────────────────────────────────────────
+Remember that name is "  Asiimwe Derick  ".
+Remember that clean name is trimmed name.
+Show "Hello, " plus clean name plus "!".
+Show uppercase of clean name.
+Show lowercase of clean name.
+Show "letters: " plus length of clean name.
+Show "words: " plus number of words in clean name.
+Show "first word: " plus first word of clean name.
+Show "last word: " plus last word of clean name.
+Show "reversed: " plus reverse of "Tooro".
+If clean name contains "Derick" then show "it mentions Derick".
+If clean name contains "Museveni" then show "wrong" else show "no match".
+Show "rounded: " plus round 7.6.
+
+# ── lists ───────────────────────────────────────────────
+Remember that districts are a list of "Kyenjojo", "Fort Portal", "Kasese".
+Show "number of districts: " plus number of items in districts.
+Show "first: " plus first item of districts.
+Show "second: " plus item 2 of districts.
+Put "Kamwenge" at the end of districts.
+Show districts.
+
+Repeat for each place in districts:
+  Show uppercase of place plus " is served".
+End the repeat.
+
+# ── functions that give values back ─────────────────────
+Make a function called interest that takes amount and rate:
+  Give back amount times rate divided by 100.
+End the function.
+
+Remember that loan is 500000.
+Show "interest is " plus the result of interest with loan and 15.
+Show "total is " plus loan plus the result of interest with loan and 15.
+
+Make a function called shout that takes text:
+  Give back uppercase of text plus "!".
+End the function.
+Show the result of shout with "tooro music".
+
+Make a function called add up that takes a and b:
+  Give back a plus b.
+End the function.
+Show add up with 5 and 7? 
