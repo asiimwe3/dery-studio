@@ -131,6 +131,22 @@
     font: 12.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; color: #d7e0ea; white-space: pre-wrap;
   }
   .console .empty { color: var(--t3); font-style: italic; font-family: inherit; }
+  .term {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+    background: #05070c; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .term.hidden { display: none; }
+  .term-out { flex: 1; overflow: auto; padding: 14px 16px; white-space: pre-wrap; word-break: break-word; color: #d7dce5; }
+  .term-out .t-cmd { color: #7dd3fc; }
+  .term-out .t-ok { color: #86efac; }
+  .term-out .t-err { color: #fca5a5; }
+  .term-out .t-dim { color: #64748b; }
+  .term-line { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid #1b2434; background: #080b12; }
+  .term-prompt { color: #22c55e; font-weight: 700; }
+  .term-line input {
+    flex: 1; background: transparent; border: 0; outline: none; color: #eaf2ff;
+    font: inherit;
+  }
   .hidden { display: none !important; }
   /* sheet */
   .sheet {
@@ -210,12 +226,21 @@
         <div class="tabs">
           <button class="tab on" id="tabSite">Website</button>
           <button class="tab" id="tabOut">Output</button>
+          <button class="tab" id="tabTerm">Terminal</button>
         </div>
         <div class="spacer"></div>
         <span class="badge" id="liveBadge">live</span>
       </div>
       <iframe id="site" title="Your website"></iframe>
       <pre class="console hidden" id="console"><span class="empty">Nothing printed yet. Use Show to print values.</span></pre>
+      <div class="term hidden" id="term">
+        <div class="term-out" id="termOut"></div>
+        <div class="term-line">
+          <span class="term-prompt">&gt;</span>
+          <input id="termIn" spellcheck="false" autocapitalize="off" autocomplete="off"
+                 placeholder="Type a Dery sentence and press Enter. Type help to see commands." />
+        </div>
+      </div>
     </section>
   </div>
 
@@ -531,7 +556,7 @@
   // ── run ──────────────────────────────────────────────────────────────
   let lastHtml = "", runTimer = null;
 
-  function run() {
+  function run(reveal) {
     const btn = $("runBtn");
     const label = btn.textContent;
     btn.textContent = "Running...";
@@ -579,10 +604,12 @@
     $("liveBadge").textContent = errs.length ? "check" : "live";
     paintGutter();
 
-    // always reveal the pane that actually has something to show
-    const hasPage = !!(res.page && res.page.blocks && res.page.blocks.length);
-    if (errs.length || out.length || !hasPage) showView("out");
-    else showView("site");
+    // when Run is pressed, reveal the pane that actually has something to show
+    if (reveal) {
+      const hasPage = !!(res.page && res.page.blocks && res.page.blocks.length);
+      if (errs.length || out.length || !hasPage) showView("out");
+      else showView("site");
+    }
   }
 
   function onInput(immediate) {
@@ -593,7 +620,7 @@
     refresh();
     if (immediate) showAc(false); else showAc(false);
     clearTimeout(runTimer);
-    runTimer = setTimeout(run, immediate ? 60 : 700);
+    runTimer = setTimeout(() => run(false), immediate ? 60 : 700);
   }
   // ── events ───────────────────────────────────────────────────────────
   ed.addEventListener("input", () => onInput(false));
@@ -626,7 +653,7 @@
       onInput(false);
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); hideAc(); run(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); hideAc(); run(true); }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveStore(); $("stateText").textContent = "Saved to this device."; }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") { e.preventDefault(); newFile(); }
   });
@@ -655,12 +682,15 @@
     const isSite = v === "site", isOut = v === "out";
     if (isMobile()) {
       left.classList.toggle("show", v === "write");
-      right.classList.toggle("show", isSite || isOut);
+      right.classList.toggle("show", isSite || isOut || v === "term");
     }
-    $("site").classList.toggle("hidden", isOut);
+    const isTerm = v === "term";
+    $("site").classList.toggle("hidden", isOut || isTerm);
     $("console").classList.toggle("hidden", !isOut);
-    $("tabSite").classList.toggle("on", !isOut);
+    $("term").classList.toggle("hidden", !isTerm);
+    $("tabSite").classList.toggle("on", !isOut && !isTerm);
     $("tabOut").classList.toggle("on", isOut);
+    $("tabTerm").classList.toggle("on", isTerm);
     document.querySelectorAll(".mini-tabs .tab").forEach((b) => b.classList.toggle("on", b.dataset.view === v));
   }
   document.querySelectorAll(".mini-tabs .tab").forEach((b) => {
@@ -668,7 +698,145 @@
   });
   function tabTo(v) { showView(v); if (!isMobile()) return; }
   $("tabSite").addEventListener("click", () => showView("site"));
-  $("tabOut").addEventListener("click", () => showView("out"));
+  $("tabOut").addEventListener("click", () => { showView("out"); $("termIn").blur(); });
+  $("tabTerm").addEventListener("click", () => { showView("term"); setTimeout(() => $("termIn").focus(), 30); });
+
+  // ── terminal ─────────────────────────────────────────────────────────
+  const termOut = $("termOut"), termIn = $("termIn");
+  let termSrc = [];       // sentences entered this session
+  let termShown = 0;      // how many printed lines are already on screen
+  let termHistory = [], termHistIdx = -1;
+
+  function tPrint(text, cls) {
+    const d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    termOut.appendChild(d);
+    termOut.scrollTop = termOut.scrollHeight;
+  }
+
+  function tBanner() {
+    tPrint("Dery terminal — type English sentences, they run immediately.", "t-dim");
+    tPrint("Try: Remember that price is 5000.   then   Show price.   (help for commands)", "t-dim");
+    tPrint("", "t-dim");
+  }
+
+  function tReset(note) {
+    termSrc = []; termShown = 0; termOut.innerHTML = "";
+    tBanner();
+    if (note) tPrint(note, "t-dim");
+  }
+
+  function tRunSession() {
+    const res = window.Dery.run(termSrc.join("\n"));
+    const out = res.output || [];
+    for (let k = termShown; k < out.length; k++) tPrint(String(out[k]));
+    termShown = out.length;
+    return res;
+  }
+
+  function tCommand(line) {
+    const low = line.toLowerCase().trim();
+    const word = low.split(/\s+/)[0];
+    if (word === "help") {
+      tPrint("Commands:", "t-ok");
+      tPrint("  help                 this list");
+      tPrint("  clear                empty the screen and forget values");
+      tPrint("  run                  run the whole file in the editor");
+      tPrint("  files                list your files");
+      tPrint("  open <name>          switch to a file");
+      tPrint("  new <name>           create a file");
+      tPrint("  save                 save the editor to this device");
+      tPrint("  site                 show the website pane");
+      tPrint("  Anything else is run as a Dery sentence, for example:");
+      tPrint('  Show "hello"     Remember that x is 5     Show uppercase of "tooro"', "t-dim");
+      return true;
+    }
+    if (word === "clear") { tReset("Screen cleared."); termIn.focus(); return true; }
+    if (word === "run") {
+      const res = window.Dery.run(ed.value);
+      tPrint("> run " + activeFile().name, "t-cmd");
+      const out = res.output || [];
+      out.forEach((l) => tPrint(String(l)));
+      (res.errors || []).forEach((e) => tPrint("Line " + e.line + ": " + e.message, "t-err"));
+      if (!out.length && !(res.errors || []).length) tPrint("Ran with no output.", "t-dim");
+      return true;
+    }
+    if (word === "files") {
+      store.files.forEach((f) => tPrint((f.id === store.active ? "* " : "  ") + f.name));
+      return true;
+    }
+    if (word === "open") {
+      const name = line.slice(4).trim().toLowerCase();
+      const f = store.files.find((x) => x.name.toLowerCase() === name || x.id === name);
+      if (!f) { tPrint("No file called " + name + ". Type files to see them.", "t-err"); return true; }
+      store.active = f.id; saveStore(); openFile(); renderFiles();
+      tPrint("Opened " + f.name, "t-ok");
+      return true;
+    }
+    if (word === "new") {
+      const raw = line.slice(3).trim();
+      const name = raw ? (/^[\w.-]+$/.test(raw) ? (/\.dery$/i.test(raw) ? raw : raw + ".dery") : null) : null;
+      if (raw && !name) { tPrint("File names should be one word, like shop.dery", "t-err"); return true; }
+      if (name && store.files.some((f) => f.name.toLowerCase() === name.toLowerCase())) {
+        tPrint("There is already a file called " + name, "t-err"); return true;
+      }
+      const f = { id: "f" + Date.now(), name: name || "untitled" + (store.files.length + 1) + ".dery", code: "" };
+      store.files.push(f); store.active = f.id; saveStore(); renderFiles(); openFile();
+      tPrint("Created " + f.name, "t-ok");
+      return true;
+    }
+    if (word === "save") { saveStore(); tPrint("Saved to this device.", "t-ok"); return true; }
+    if (word === "site") { showView("site"); return true; }
+    return false;
+  }
+
+  function tSubmit() {
+    const line = termIn.value.trim();
+    termIn.value = "";
+    if (!line) return;
+    termHistory.push(line); termHistIdx = termHistory.length;
+    tPrint("> " + line, "t-cmd");
+    if (tCommand(line)) return;
+
+    const attempt = termSrc.concat([line]);
+    let res;
+    try {
+      res = window.Dery.run(attempt.join("\n"));
+    } catch (err) {
+      tPrint("That crashed: " + (err && err.message ? err.message : String(err)), "t-err");
+      return;
+    }
+    const errs = res.errors || [];
+    if (errs.length) {
+      errs.forEach((e) => tPrint("Line " + e.line + ": " + e.message, "t-err"));
+      return; // keep the session clean, the bad line is dropped
+    }
+    termSrc = attempt;
+    const out = res.output || [];
+    for (let k = termShown; k < out.length; k++) tPrint(String(out[k]));
+    termShown = out.length;
+  }
+
+  termIn.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); tSubmit(); return; }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!termHistory.length) return;
+      termHistIdx = Math.max(0, termHistIdx - 1);
+      termIn.value = termHistory[termHistIdx] || "";
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!termHistory.length) return;
+      termHistIdx = Math.min(termHistory.length, termHistIdx + 1);
+      termIn.value = termHistory[termHistIdx] || "";
+      return;
+    }
+  });
+
+  tBanner();
 
   // ── side drawer ──────────────────────────────────────────────────────
   function openSide() { $("side").classList.add("on"); $("scrim").classList.add("on"); }
@@ -682,7 +850,7 @@
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
 
   // ── run + save buttons ───────────────────────────────────────────────
-  $("runBtn").addEventListener("click", () => { hideAc(); run(); });
+  $("runBtn").addEventListener("click", () => { hideAc(); run(true); });
   $("saveHtmlBtn").addEventListener("click", () => {
     run();
     const name = (activeFile().name || "site").replace(/\.dery$/i, "");
