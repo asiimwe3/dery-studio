@@ -333,8 +333,34 @@
     </div>
   </div>
 
-<script src="dery2.js?v=1793456720"></script>
-<script src="app.js?v=1793456720"></script>
+<script>
+  // startup guard: if anything fails to load, say so instead of showing a blank screen
+  (function () {
+    function fail(msg) {
+      var b = document.getElementById("boot");
+      if (!b) {
+        b = document.createElement("div");
+        b.id = "boot";
+        b.style.cssText = "position:fixed;inset:0;z-index:9999;background:#0b0d11;color:#ffb347;font:16px/1.5 system-ui,sans-serif;padding:28px;text-align:center";
+        b.onclick = function () { location.href = location.pathname + "?fresh=" + Date.now(); };
+        document.body.appendChild(b);
+      }
+      b.innerHTML = '<div style="font-size:22px;font-weight:700;margin-bottom:10px">Dery Studio did not start</div>' +
+        '<div style="color:#e5e7eb;margin-bottom:16px">' + msg + '</div>' +
+        '<div style="display:inline-block;padding:12px 20px;border-radius:10px;background:#FF8A00;color:#111;font-weight:700">Tap here to load a fresh copy</div>';
+    }
+    window.addEventListener("error", function (e) { fail("Startup problem: " + (e.message || "unknown")); });
+    window.addEventListener("load", function () {
+      setTimeout(function () {
+        if (!document.querySelector(".file") || !document.getElementById("editor")) {
+          fail("The editor did not appear. Your browser may be holding an old copy.");
+        }
+      }, 1800);
+    });
+  })();
+</script>
+<script src="dery2.js?v=1793456913"></script>
+<script src="app.js?v=1793456913"></script>
 
 </body>
 </html>

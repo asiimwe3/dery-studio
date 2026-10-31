@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dery Studio</title>
+<meta name="theme-color" content="#0b0d11" />
+<style>
+  :root {
+    --bg: #0b0d11; --panel: #11141a; --panel2: #161a21; --bd: #232a35;
+    --t1: #ffffff; --t2: #9aa4b2; --t3: #5c6675;
+    --or: #ff8a00; --or2: #ffb347; --gr: #22c55e; --rd: #f43f5e;
+    --kw: #ff9d3d; --str: #7ee787; --num: #79c0ff; --cmt: #5c6675; --con: #c792ea;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--t1);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  /* top bar */
+  .top {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    background: var(--panel); border-bottom: 1px solid var(--bd); flex: 0 0 auto;
+  }
+  .logo {
+    width: 28px; height: 28px; border-radius: 9px; background: linear-gradient(135deg, var(--or), #ff5a00);
+    display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 15px; color: #10100f;
+  }
+  .name { font-weight: 800; font-size: 14.5px; letter-spacing: .2px; }
+  .sub { font-size: 10.5px; color: var(--t3); letter-spacing: .12em; text-transform: uppercase; }
+  .spacer { flex: 1; }
+  button {
+    font-family: inherit; cursor: pointer; border-radius: 9px; border: 1px solid var(--bd);
+    background: var(--panel2); color: var(--t1); padding: 7px 12px; font-size: 12.5px; font-weight: 600;
+  }
+  button:hover { border-color: #37404f; }
+  button.primary { background: linear-gradient(135deg, var(--or), #ff6a00); border-color: transparent; color: #1a1206; font-weight: 800; }
+  button.ghost { background: transparent; }
+  button.icon { padding: 6px 9px; }
+  /* layout */
+  .main { flex: 1; display: flex; min-height: 0; }
+  .side {
+    width: 176px; flex: 0 0 176px; background: var(--panel); border-right: 1px solid var(--bd);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .side-head { display: flex; align-items: center; justify-content: space-between; padding: 9px 10px 7px; }
+  .side-head span { font-size: 10px; letter-spacing: .14em; color: var(--t3); text-transform: uppercase; font-weight: 700; }
+  .files { overflow: auto; padding: 0 6px 8px; flex: 1; }
+  .file {
+    display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 8px;
+    font-size: 12.5px; color: var(--t2); cursor: pointer; margin-bottom: 2px;
+  }
+  .file:hover { background: var(--panel2); color: var(--t1); }
+  .file.on { background: #1d232c; color: var(--t1); box-shadow: inset 0 0 0 1px #2b3442; }
+  .file b { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--or); flex: 0 0 auto; opacity: 0; }
+  .file.err .dot { background: var(--rd); opacity: 1; }
+  .file .del { color: var(--t3); font-size: 13px; padding: 0 2px; }
+  .pane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .pane-head {
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--panel2);
+    border-bottom: 1px solid var(--bd); flex: 0 0 auto; font-size: 10.5px; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--t3); font-weight: 700;
+  }
+  .tabs { display: flex; gap: 4px; }
+  .tab {
+    padding: 5px 10px; border-radius: 7px; font-size: 10.5px; letter-spacing: .1em;
+    text-transform: uppercase; font-weight: 800; color: var(--t3); cursor: pointer; border: none; background: transparent;
+  }
+  .tab.on { color: var(--t1); background: #222a35; }
+  .badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: #1d232c; color: var(--t2); letter-spacing: .04em; text-transform: none; }
+  /* editor */
+  .ed-wrap { flex: 1; display: flex; min-height: 0; position: relative; background: var(--bg); }
+  .gutter {
+    flex: 0 0 46px; padding: 12px 0; text-align: right; background: var(--bg);
+    color: var(--t3); font: 13px/21px ui-monospace, SFMono-Regular, Menlo, monospace;
+    user-select: none; overflow: hidden; border-right: 1px solid #171c24;
+  }
+  .gutter div { padding-right: 8px; height: 21px; }
+  .gutter div.bad { color: var(--rd); font-weight: 800; }
+  .code { position: relative; flex: 1; min-width: 0; overflow: auto; }
+  .code pre, .code textarea {
+    margin: 0; padding: 12px 14px 60px; border: 0; width: 100%;
+    font: 13px/21px ui-monospace, SFMono-Regular, Menlo, monospace;
+    white-space: pre; tab-size: 2; letter-spacing: 0;
+  }
+  .code pre {
+    position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+    color: #dbe4ee; z-index: 1;
+  }
+  .code textarea {
+    position: relative; z-index: 2; background: transparent; color: transparent;
+    caret-color: var(--or); resize: none; outline: none; min-height: 100%; height: auto;
+    -webkit-text-fill-color: transparent;
+  }
+  .code textarea::selection { background: rgba(255,138,0,.28); }
+  .code textarea::placeholder { color: #3d4653; -webkit-text-fill-color: #3d4653; }
+  .hl-kw { color: var(--kw); font-weight: 700; }
+  .hl-str { color: var(--str); }
+  .hl-num { color: var(--num); }
+  .hl-cmt { color: var(--cmt); font-style: italic; }
+  .hl-con { color: var(--con); }
+  /* autocomplete */
+  .ac {
+    position: absolute; z-index: 20; background: #1b212b; border: 1px solid #2d3644;
+    border-radius: 10px; box-shadow: 0 18px 40px rgba(0,0,0,.55); overflow: hidden;
+    max-height: 232px; overflow-y: auto; min-width: 260px; display: none;
+  }
+  .ac.on { display: block; }
+  .ac-i { padding: 8px 11px; font: 12.5px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; color: #cfd8e3; cursor: pointer; border-bottom: 1px solid #202732; }
+  .ac-i:last-child { border-bottom: 0; }
+  .ac-i.on { background: #26303c; color: #fff; }
+  .ac-i em { color: var(--or2); font-style: normal; }
+  .ac-hint { color: var(--t3); font-size: 10px; padding: 5px 11px; text-transform: uppercase; letter-spacing: .1em; background: #161b23; }
+  /* status */
+  .status {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+    background: var(--panel); border-top: 1px solid var(--bd); font-size: 11.5px; color: var(--t2);
+    overflow: hidden; white-space: nowrap;
+  }
+  .status .ok { color: var(--gr); }
+  .status .bad { color: var(--rd); }
+  .status .sep { color: #2b3442; }
+  /* right side */
+  .right { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--bd); }
+  iframe#site { flex: 1; border: 0; background: #fff; width: 100%; }
+  .console {
+    flex: 1; overflow: auto; padding: 12px 14px; margin: 0;
+    font: 12.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; color: #d7e0ea; white-space: pre-wrap;
+  }
+  .console .empty { color: var(--t3); font-style: italic; font-family: inherit; }
+  .term {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+    background: #05070c; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .term.hidden { display: none; }
+  .term-out { flex: 1; overflow: auto; padding: 14px 16px; white-space: pre-wrap; word-break: break-word; color: #d7dce5; }
+  .term-out .t-cmd { color: #7dd3fc; }
+  .term-out .t-ok { color: #86efac; }
+  .term-out .t-err { color: #fca5a5; }
+  .term-out .t-dim { color: #64748b; }
+  .term-line { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid #1b2434; background: #080b12; }
+  .term-prompt { color: #22c55e; font-weight: 700; }
+  .term-line input {
+    flex: 1; background: transparent; border: 0; outline: none; color: #eaf2ff;
+    font: inherit;
+  }
+  .hidden { display: none !important; }
+  /* sheet */
+  .sheet {
+    position: fixed; inset: 0; z-index: 50; background: rgba(4,6,10,.72);
+    display: none; align-items: flex-end; justify-content: center; backdrop-filter: blur(3px);
+  }
+  .sheet.on { display: flex; }
+  .sheet-in {
+    background: var(--panel); border: 1px solid var(--bd); border-radius: 16px 16px 0 0;
+    width: 100%; max-width: 720px; max-height: 84vh; overflow: auto; padding: 16px 18px 26px;
+  }
+  .sheet-in h3 { margin: 0 0 4px; font-size: 15px; }
+  .sheet-in p.hint { margin: 0 0 14px; font-size: 12.5px; color: var(--t2); }
+  .sheet-in h4 { margin: 16px 0 7px; font-size: 10.5px; letter-spacing: .13em; text-transform: uppercase; color: var(--or); }
+  .ref { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: #c8d2de; }
+  .ref div { padding: 3px 0; border-bottom: 1px dashed #1e242d; }
+  .ref i { color: var(--t3); font-style: normal; }
+  @media (max-width: 880px) {
+    .side { position: fixed; z-index: 30; top: 0; bottom: 0; transform: translateX(-100%); transition: transform .22s ease; }
+    .side.on { transform: none; box-shadow: 0 0 60px rgba(0,0,0,.6); }
+    .main > .pane, .main > .right { display: none; }
+    .main > .pane.show, .main > .right.show { display: flex; }
+    .mini-tabs { display: flex; gap: 6px; padding: 7px 12px; background: var(--panel2); border-bottom: 1px solid var(--bd); }
+    .code pre, .code textarea { font-size: 12.5px; line-height: 20px; }
+    .gutter { font-size: 12.5px; line-height: 20px; }
+    .gutter div { height: 20px; }
+  }
+  @media (min-width: 881px) { .mini-tabs { display: none; } .scrim { display: none !important; } }
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 25; display: none; }
+  .scrim.on { display: block; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <button class="icon ghost" id="menuBtn" title="Files">☰</button>
+    <div class="logo">D</div>
+    <div>
+      <div class="name">Dery Studio</div>
+      <div class="sub">write in plain english</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost" id="helpBtn">How to write</button>
+    <button id="saveHtmlBtn">Save HTML</button>
+    <button class="primary" id="runBtn">▶ Run</button>
+  </div>
+
+  <div class="main">
+    <aside class="side" id="side">
+      <div class="side-head"><span>Your files</span><button class="icon" id="newFileBtn" title="New file">＋</button></div>
+      <div class="files" id="files"></div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <section class="pane show" id="leftPane">
+      <div class="pane-head">
+        <span id="fileName">program.dery</span>
+        <div class="spacer"></div>
+        <span class="badge" id="langBadge">Dery</span>
+      </div>
+      <div class="mini-tabs">
+        <button class="tab on" data-view="write">Write</button>
+        <button class="tab" data-view="site">Website</button>
+        <button class="tab" data-view="out">Output</button>
+      </div>
+      <div class="ed-wrap">
+        <div class="gutter" id="gutter"></div>
+        <div class="code" id="codeScroll">
+          <pre id="hl" aria-hidden="true"></pre>
+          <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Start writing in English, one sentence per line.&#10;&#10;Press Ctrl+Enter to run. Tap How to write for the sentences Dery understands."></textarea>
+        </div>
+        <div class="ac" id="ac"></div>
+      </div>
+    </section>
+
+    <section class="right show" id="rightPane">
+      <div class="pane-head">
+        <div class="tabs">
+          <button class="tab on" id="tabSite">Website</button>
+          <button class="tab" id="tabOut">Output</button>
+          <button class="tab" id="tabTerm">Terminal</button>
+        </div>
+        <div class="spacer"></div>
+        <span class="badge" id="liveBadge">live</span>
+      </div>
+      <iframe id="site" title="Your website"></iframe>
+      <pre class="console hidden" id="console"><span class="empty">Nothing printed yet. Use Show to print values.</span></pre>
+      <div class="term hidden" id="term">
+        <div class="term-out" id="termOut"></div>
+        <div class="term-line">
+          <span class="term-prompt">&gt;</span>
+          <input id="termIn" spellcheck="false" autocapitalize="off" autocomplete="off"
+                 placeholder="Type a Dery sentence and press Enter. Type help to see commands." />
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="status">
+    <span id="stateIc" class="ok">✓</span>
+    <span id="stateText">Ready.</span>
+    <span class="sep">|</span>
+    <span id="statCount">0 statements</span>
+    <span class="sep">|</span>
+    <span id="statLines">0 lines out</span>
+    <span class="sep">|</span>
+    <span id="statCursor">Ln 1, Col 1</span>
+  </div>
+
+  <div class="sheet" id="sheet">
+    <div class="sheet-in">
+      <h3>How to write Dery</h3>
+      <p class="hint">One sentence per line. Full stops are optional. Lines starting with # are notes.</p>
+
+      <h4>Build a website</h4>
+      <div class="ref">
+        <div>Create a website called <i>"Your business"</i>.</div>
+        <div>Add a navigation bar with <i>"Home", "Services", "Contact"</i>.</div>
+        <div>Add a big heading that says <i>"Welcome"</i>.</div>
+        <div>Add a paragraph that says <i>"Any text you want"</i>.</div>
+        <div>Add a button that says <i>"Call us"</i> linking to <i>"tel:+256..."</i>.</div>
+        <div>Add a list with <i>"Item one", "Item two"</i>.</div>
+        <div>Add an image showing <i>"https://..."</i>.</div>
+        <div>Add a section called <i>"Title"</i>. ... End the section.</div>
+        <div>Add a contact form.   Add a footer that says <i>"..."</i>.</div>
+        <div>Make the background color dark.   Set the text color to white.</div>
+        <div>Make the buttons orange.   Center everything.   Use a wide layout.</div>
+      </div>
+
+      <h4>Values and maths</h4>
+      <div class="ref">
+        <div>Remember that price is 5000.</div>
+        <div>Set price to price plus 500.   Add 500 to price.</div>
+        <div>Subtract 200 from price.   Multiply price by 2.   Divide price by 3.</div>
+        <div>Show <i>"Total: " plus price</i>.   Show price.</div>
+      </div>
+
+      <h4>Conditions and loops</h4>
+      <div class="ref">
+        <div>If price is more than 1000 then show <i>"big"</i>.</div>
+        <div>If price is more than 1000: ... Otherwise: ... End the if.</div>
+        <div>Repeat 3 times: ... End the repeat.   <i>(the counter is called "it")</i></div>
+        <div>While counter is less than 5: ... End the while.</div>
+      </div>
+
+      <h4>Text (strings)</h4>
+      <div class="ref">
+        <div>Show uppercase of <i>name</i>.   Show lowercase of <i>name</i>.</div>
+        <div>Show length of <i>name</i>.   Show number of words in <i>name</i>.</div>
+        <div>Show first word of <i>name</i>.   Show last word of <i>name</i>.</div>
+        <div>Show trimmed <i>name</i>.   Show reverse of <i>name</i>.   Show round 7.6.</div>
+        <div>If <i>name</i> contains <i>"Music"</i> then show <i>"yes"</i>.</div>
+      </div>
+
+      <h4>Lists</h4>
+      <div class="ref">
+        <div>Remember that districts are a list of <i>"Kyenjojo", "Kasese"</i>.</div>
+        <div>Repeat for each place in districts: ... End the repeat.</div>
+        <div>Show number of items in districts.   Show first item of districts.</div>
+        <div>Show item 2 of districts.   Show last item of districts.</div>
+        <div>Put <i>"Kamwenge"</i> at the end of districts.</div>
+      </div>
+
+      <h4>Opening links and real data</h4>
+      <div class="ref">
+        <div>Get the link <i>"https://api..."</i> into data.</div>
+        <div>Show the value of <i>"temperature"</i> in data.</div>
+        <div>Repeat for each row in data: ... End the repeat.</div>
+        <div>Real example: Get the link <i>"https://api.open-meteo.com/v1/forecast?latitude=0.65&amp;longitude=30.28&amp;current_weather=true"</i> into w.</div>
+      </div>
+
+      <h4>Functions</h4>
+      <div class="ref">
+        <div>Make a function called greet that takes name: ... End the function.</div>
+        <div>Call greet with <i>"Tooro"</i>.</div>
+        <div>Make a function called area that takes w and h: Give back w times h. End the function.</div>
+        <div>Show the result of area with 5 and 3.</div>
+      </div>
+
+      <h4>Shortcuts</h4>
+      <div class="ref">
+        <div>Run: Ctrl+Enter  ·  Save: Ctrl+S  ·  New file: Ctrl+N</div>
+        <div>Accept a suggestion: Tab or Enter  ·  Move: ↑ ↓  ·  Close: Esc</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // startup guard: if anything fails to load, say so instead of showing a blank screen
+  (function () {
+    function fail(msg) {
+      var b = document.getElementById("boot");
+      if (!b) {
+        b = document.createElement("div");
+        b.id = "boot";
+        b.style.cssText = "position:fixed;inset:0;z-index:9999;background:#0b0d11;color:#ffb347;font:16px/1.5 system-ui,sans-serif;padding:28px;text-align:center";
+        b.onclick = function () { location.href = location.pathname + "?fresh=" + Date.now(); };
+        document.body.appendChild(b);
+      }
+      b.innerHTML = '<div style="font-size:22px;font-weight:700;margin-bottom:10px">Dery Studio did not start</div>' +
+        '<div style="color:#e5e7eb;margin-bottom:16px">' + msg + '</div>' +
+        '<div style="display:inline-block;padding:12px 20px;border-radius:10px;background:#FF8A00;color:#111;font-weight:700">Tap here to load a fresh copy</div>';
+    }
+    window.addEventListener("error", function (e) { fail("Startup problem: " + (e.message || "unknown")); });
+    window.addEventListener("load", function () {
+      setTimeout(function () {
+        if (!document.querySelector(".file") || !document.getElementById("editor")) {
+          fail("The editor did not appear. Your browser may be holding an old copy.");
+        }
+      }, 1800);
+    });
+  })();
+</script>
+<script src="dery2.js?v=1793456913"></script>
+<script src="app.js?v=1793456913"></script>
+
+</body>
+</html>
