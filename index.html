@@ -309,6 +309,14 @@
         <div>Put <i>"Kamwenge"</i> at the end of districts.</div>
       </div>
 
+      <h4>Opening links and real data</h4>
+      <div class="ref">
+        <div>Get the link <i>"https://api..."</i> into data.</div>
+        <div>Show the value of <i>"temperature"</i> in data.</div>
+        <div>Repeat for each row in data: ... End the repeat.</div>
+        <div>Real example: Get the link <i>"https://api.open-meteo.com/v1/forecast?latitude=0.65&amp;longitude=30.28&amp;current_weather=true"</i> into w.</div>
+      </div>
+
       <h4>Functions</h4>
       <div class="ref">
         <div>Make a function called greet that takes name: ... End the function.</div>
@@ -493,6 +501,16 @@
         const W = (n) => { const t = toks[i + n]; return t && t.t === "word" ? t.v.toLowerCase() : null; };
         const take = (n) => { i += n; };
 
+        if (W(0) === "the" && W(1) === "value" && W(2) === "of") {
+          take(3);
+          const kt = peek();
+          let key = null;
+          if (kt && kt.t === "str") { key = kt.v; next(); }
+          else if (kt && kt.t === "word") { key = kt.v; next(); }
+          if (W(0) === "in") take(1);
+          return { k: "field", key, a: parseAtom() };
+        }
+
         if (W(0) === "the" && W(1) === "result" && W(2) === "of") {
           take(3);
           const nt = peek();
@@ -609,6 +627,15 @@
       case "atitem": {
         const ai = evalExpr(node.a, scope, rt);
         return Array.isArray(ai) ? ai[Math.round(node.idx) - 1] : null;
+      }
+      case "field": {
+        const obj = evalExpr(node.a, scope, rt);
+        if (Array.isArray(obj) && /^\d+$/.test(String(node.key))) return obj[Number(node.key) - 1];
+        if (obj && typeof obj === "object") {
+          const v = obj[node.key];
+          return v === undefined ? null : v;
+        }
+        return null;
       }
       case "fcall": return rt.call ? rt.call(node.name, node.args.map((ax) => evalExpr(ax, scope, rt)), scope) : null;
       case "var": {
@@ -801,6 +828,16 @@
         const give = line.text.match(/^(?:give\s+back|return|send\s+back)\s+(.+?)\s*\.?$/i);
         if (give) {
           stmts.push({ k: "give", expr: parseExpr(give[1].replace(/\.$/, "")), line: line.n });
+          idx++;
+          continue;
+        }
+
+        /* ── open a link and keep the answer ─────────────────────── */
+        const getLink = line.text.match(/^(?:get|open|read|load|fetch|bring)\s+(?:the\s+)?(?:(?:link|page|url|web ?page|data|answer)\s+)?(?:"([^"]+)"|(\S+))\s+(?:in ?to|as|inside)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\.?$/i);
+        if (getLink) {
+          const urlText = getLink[1] || getLink[2];
+          const target = getLink[3];
+          stmts.push({ k: "fetch", url: { k: "lit", v: urlText }, target, line: line.n });
           idx++;
           continue;
         }
@@ -1002,6 +1039,7 @@
   /* ── interpreter ──────────────────────────────────────────────────── */
   function run(source, options) {
     const opts = options || {};
+    const links = opts.links || linkCache;
     const { program, errors } = parseProgram(source);
 
     const page = {
@@ -1168,6 +1206,20 @@
             rt.call(st.name, st.args.map((a3) => evalExpr(a3, scope, rt)), scope);
             break;
           }
+          case "fetch": {
+            const url = String(evalExpr(st.url, scope, rt) || "");
+            const rec = links[url];
+            if (!rec) {
+              rt.error(`I have not opened ${url} yet. Write: Get the link "${url}" into ${st.target}.`);
+              break;
+            }
+            if (!rec.ok) {
+              rt.error(`I could not open ${url}` + (rec.status ? ` (it answered ${rec.status})` : "") + `. ` + (rec.error || "Check the link and try again."));
+              break;
+            }
+            scope.set(st.target, rec.json !== null && rec.json !== undefined ? rec.json : rec.text);
+            break;
+          }
           case "page": applyPage(st.page, scope); break;
           default: break;
         }
@@ -1194,6 +1246,43 @@
       errors: errors.concat(runtimeErrors.map((e) => ({ line: 0, message: e.message, hint: "" }))),
       stats: { sentences: countStatements(program), steps },
     };
+  }
+
+  /* ── opening links ──────────────────────────────────────────────────
+     A Dery program may read real data from the internet:
+        Get the link "https://..." into data.
+     The program itself stays simple and synchronous: links mentioned in
+     the source are opened first, then the sentences run with the answers.
+     ─────────────────────────────────────────────────────────────────── */
+  const linkCache = Object.create(null);
+  const LINK_TTL = 60000;
+
+  function collectLinks(src) {
+    const out = new Set();
+    const re = /"(https?:\/\/[^"\s]+)"/g;
+    let m;
+    while ((m = re.exec(src))) out.add(m[1]);
+    return Array.from(out);
+  }
+
+  async function prefetchLinks(src) {
+    const urls = collectLinks(src);
+    await Promise.all(urls.map(async (u) => {
+      const hit = linkCache[u];
+      if (hit && Date.now() - hit.at < LINK_TTL) return;
+      try {
+        const r = await fetch(u, { headers: { Accept: "application/json, text/plain, */*" } });
+        const text = await r.text();
+        let json = null;
+        try { json = JSON.parse(text); } catch (_) { json = null; }
+        linkCache[u] = { ok: r.ok, status: r.status, text, json, at: Date.now() };
+      } catch (err) {
+        linkCache[u] = {
+          ok: false, status: 0, text: "", json: null, at: Date.now(),
+          error: err && err.message ? err.message : String(err),
+        };
+      }
+    }));
   }
 
   function countStatements(stmts) {
@@ -1287,7 +1376,12 @@ ${blocks(rest, 1)}</main>
 </html>`;
   }
 
-  const api = { run, compile: run, render, COLORS };
+  async function runAsync(source) {
+    await prefetchLinks(source);
+    return run(source, { links: linkCache });
+  }
+
+  const api = { run, runAsync, prefetchLinks, compile: run, render, COLORS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.Dery = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
@@ -1444,6 +1538,8 @@ ${blocks(rest, 1)}</main>
     "Make a function called greet that takes name:",
     "End the function",
     'Call greet with "Tooro"'
+    'Get the link "https://api.open-meteo.com/v1/forecast?latitude=0.65&longitude=30.28&current_weather=true" into data',
+    'Show the value of "temperature" in data',
   ];
 
   let acItems = [], acIdx = 0, acStart = -1, acOpen = false;
@@ -1523,7 +1619,7 @@ ${blocks(rest, 1)}</main>
   // ── run ──────────────────────────────────────────────────────────────
   let lastHtml = "", runTimer = null;
 
-  function run(reveal) {
+  async function run(reveal) {
     const btn = $("runBtn");
     const label = btn.textContent;
     btn.textContent = "Running...";
@@ -1538,7 +1634,12 @@ ${blocks(rest, 1)}</main>
     }
     let res;
     try {
-      res = api.run(ed.value);
+      if (/https?:\/\//.test(ed.value) && api.runAsync) {
+        $("stateText").textContent = "Opening the links in your program...";
+        res = await api.runAsync(ed.value);
+      } else {
+        res = api.run(ed.value);
+      }
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       $("stateIc").textContent = "!";
@@ -1702,7 +1803,7 @@ ${blocks(rest, 1)}</main>
     return res;
   }
 
-  function tCommand(line) {
+  async function tCommand(line) {
     const low = line.toLowerCase().trim();
     const word = low.split(/\s+/)[0];
     if (word === "help") {
@@ -1721,7 +1822,9 @@ ${blocks(rest, 1)}</main>
     }
     if (word === "clear") { tReset("Screen cleared."); termIn.focus(); return true; }
     if (word === "run") {
-      const res = window.Dery.run(ed.value);
+      const res = /https?:\/\//.test(ed.value) && window.Dery.runAsync
+        ? await window.Dery.runAsync(ed.value)
+        : window.Dery.run(ed.value);
       tPrint("> run " + activeFile().name, "t-cmd");
       const out = res.output || [];
       out.forEach((l) => tPrint(String(l)));
@@ -1758,18 +1861,20 @@ ${blocks(rest, 1)}</main>
     return false;
   }
 
-  function tSubmit() {
+  async function tSubmit() {
     const line = termIn.value.trim();
     termIn.value = "";
     if (!line) return;
     termHistory.push(line); termHistIdx = termHistory.length;
     tPrint("> " + line, "t-cmd");
-    if (tCommand(line)) return;
+    if (await tCommand(line)) return;
 
     const attempt = termSrc.concat([line]);
     let res;
     try {
-      res = window.Dery.run(attempt.join("\n"));
+      res = /https?:\/\//.test(attempt.join("\n")) && window.Dery.runAsync
+        ? await window.Dery.runAsync(attempt.join("\n"))
+        : window.Dery.run(attempt.join("\n"));
     } catch (err) {
       tPrint("That crashed: " + (err && err.message ? err.message : String(err)), "t-err");
       return;

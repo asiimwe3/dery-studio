@@ -309,6 +309,14 @@
         <div>Put <i>"Kamwenge"</i> at the end of districts.</div>
       </div>
 
+      <h4>Opening links and real data</h4>
+      <div class="ref">
+        <div>Get the link <i>"https://api..."</i> into data.</div>
+        <div>Show the value of <i>"temperature"</i> in data.</div>
+        <div>Repeat for each row in data: ... End the repeat.</div>
+        <div>Real example: Get the link <i>"https://api.open-meteo.com/v1/forecast?latitude=0.65&amp;longitude=30.28&amp;current_weather=true"</i> into w.</div>
+      </div>
+
       <h4>Functions</h4>
       <div class="ref">
         <div>Make a function called greet that takes name: ... End the function.</div>
@@ -477,6 +485,8 @@
     "Make a function called greet that takes name:",
     "End the function",
     'Call greet with "Tooro"'
+    'Get the link "https://api.open-meteo.com/v1/forecast?latitude=0.65&longitude=30.28&current_weather=true" into data',
+    'Show the value of "temperature" in data',
   ];
 
   let acItems = [], acIdx = 0, acStart = -1, acOpen = false;
@@ -556,7 +566,7 @@
   // ── run ──────────────────────────────────────────────────────────────
   let lastHtml = "", runTimer = null;
 
-  function run(reveal) {
+  async function run(reveal) {
     const btn = $("runBtn");
     const label = btn.textContent;
     btn.textContent = "Running...";
@@ -571,7 +581,12 @@
     }
     let res;
     try {
-      res = api.run(ed.value);
+      if (/https?:\/\//.test(ed.value) && api.runAsync) {
+        $("stateText").textContent = "Opening the links in your program...";
+        res = await api.runAsync(ed.value);
+      } else {
+        res = api.run(ed.value);
+      }
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
       $("stateIc").textContent = "!";
@@ -735,7 +750,7 @@
     return res;
   }
 
-  function tCommand(line) {
+  async function tCommand(line) {
     const low = line.toLowerCase().trim();
     const word = low.split(/\s+/)[0];
     if (word === "help") {
@@ -754,7 +769,9 @@
     }
     if (word === "clear") { tReset("Screen cleared."); termIn.focus(); return true; }
     if (word === "run") {
-      const res = window.Dery.run(ed.value);
+      const res = /https?:\/\//.test(ed.value) && window.Dery.runAsync
+        ? await window.Dery.runAsync(ed.value)
+        : window.Dery.run(ed.value);
       tPrint("> run " + activeFile().name, "t-cmd");
       const out = res.output || [];
       out.forEach((l) => tPrint(String(l)));
@@ -791,18 +808,20 @@
     return false;
   }
 
-  function tSubmit() {
+  async function tSubmit() {
     const line = termIn.value.trim();
     termIn.value = "";
     if (!line) return;
     termHistory.push(line); termHistIdx = termHistory.length;
     tPrint("> " + line, "t-cmd");
-    if (tCommand(line)) return;
+    if (await tCommand(line)) return;
 
     const attempt = termSrc.concat([line]);
     let res;
     try {
-      res = window.Dery.run(attempt.join("\n"));
+      res = /https?:\/\//.test(attempt.join("\n")) && window.Dery.runAsync
+        ? await window.Dery.runAsync(attempt.join("\n"))
+        : window.Dery.run(attempt.join("\n"));
     } catch (err) {
       tPrint("That crashed: " + (err && err.message ? err.message : String(err)), "t-err");
       return;

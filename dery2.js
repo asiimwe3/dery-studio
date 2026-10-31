@@ -165,6 +165,16 @@
         const W = (n) => { const t = toks[i + n]; return t && t.t === "word" ? t.v.toLowerCase() : null; };
         const take = (n) => { i += n; };
 
+        if (W(0) === "the" && W(1) === "value" && W(2) === "of") {
+          take(3);
+          const kt = peek();
+          let key = null;
+          if (kt && kt.t === "str") { key = kt.v; next(); }
+          else if (kt && kt.t === "word") { key = kt.v; next(); }
+          if (W(0) === "in") take(1);
+          return { k: "field", key, a: parseAtom() };
+        }
+
         if (W(0) === "the" && W(1) === "result" && W(2) === "of") {
           take(3);
           const nt = peek();
@@ -281,6 +291,15 @@
       case "atitem": {
         const ai = evalExpr(node.a, scope, rt);
         return Array.isArray(ai) ? ai[Math.round(node.idx) - 1] : null;
+      }
+      case "field": {
+        const obj = evalExpr(node.a, scope, rt);
+        if (Array.isArray(obj) && /^\d+$/.test(String(node.key))) return obj[Number(node.key) - 1];
+        if (obj && typeof obj === "object") {
+          const v = obj[node.key];
+          return v === undefined ? null : v;
+        }
+        return null;
       }
       case "fcall": return rt.call ? rt.call(node.name, node.args.map((ax) => evalExpr(ax, scope, rt)), scope) : null;
       case "var": {
@@ -473,6 +492,16 @@
         const give = line.text.match(/^(?:give\s+back|return|send\s+back)\s+(.+?)\s*\.?$/i);
         if (give) {
           stmts.push({ k: "give", expr: parseExpr(give[1].replace(/\.$/, "")), line: line.n });
+          idx++;
+          continue;
+        }
+
+        /* ── open a link and keep the answer ─────────────────────── */
+        const getLink = line.text.match(/^(?:get|open|read|load|fetch|bring)\s+(?:the\s+)?(?:(?:link|page|url|web ?page|data|answer)\s+)?(?:"([^"]+)"|(\S+))\s+(?:in ?to|as|inside)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\.?$/i);
+        if (getLink) {
+          const urlText = getLink[1] || getLink[2];
+          const target = getLink[3];
+          stmts.push({ k: "fetch", url: { k: "lit", v: urlText }, target, line: line.n });
           idx++;
           continue;
         }
@@ -674,6 +703,7 @@
   /* ── interpreter ──────────────────────────────────────────────────── */
   function run(source, options) {
     const opts = options || {};
+    const links = opts.links || linkCache;
     const { program, errors } = parseProgram(source);
 
     const page = {
@@ -840,6 +870,20 @@
             rt.call(st.name, st.args.map((a3) => evalExpr(a3, scope, rt)), scope);
             break;
           }
+          case "fetch": {
+            const url = String(evalExpr(st.url, scope, rt) || "");
+            const rec = links[url];
+            if (!rec) {
+              rt.error(`I have not opened ${url} yet. Write: Get the link "${url}" into ${st.target}.`);
+              break;
+            }
+            if (!rec.ok) {
+              rt.error(`I could not open ${url}` + (rec.status ? ` (it answered ${rec.status})` : "") + `. ` + (rec.error || "Check the link and try again."));
+              break;
+            }
+            scope.set(st.target, rec.json !== null && rec.json !== undefined ? rec.json : rec.text);
+            break;
+          }
           case "page": applyPage(st.page, scope); break;
           default: break;
         }
@@ -866,6 +910,43 @@
       errors: errors.concat(runtimeErrors.map((e) => ({ line: 0, message: e.message, hint: "" }))),
       stats: { sentences: countStatements(program), steps },
     };
+  }
+
+  /* ── opening links ──────────────────────────────────────────────────
+     A Dery program may read real data from the internet:
+        Get the link "https://..." into data.
+     The program itself stays simple and synchronous: links mentioned in
+     the source are opened first, then the sentences run with the answers.
+     ─────────────────────────────────────────────────────────────────── */
+  const linkCache = Object.create(null);
+  const LINK_TTL = 60000;
+
+  function collectLinks(src) {
+    const out = new Set();
+    const re = /"(https?:\/\/[^"\s]+)"/g;
+    let m;
+    while ((m = re.exec(src))) out.add(m[1]);
+    return Array.from(out);
+  }
+
+  async function prefetchLinks(src) {
+    const urls = collectLinks(src);
+    await Promise.all(urls.map(async (u) => {
+      const hit = linkCache[u];
+      if (hit && Date.now() - hit.at < LINK_TTL) return;
+      try {
+        const r = await fetch(u, { headers: { Accept: "application/json, text/plain, */*" } });
+        const text = await r.text();
+        let json = null;
+        try { json = JSON.parse(text); } catch (_) { json = null; }
+        linkCache[u] = { ok: r.ok, status: r.status, text, json, at: Date.now() };
+      } catch (err) {
+        linkCache[u] = {
+          ok: false, status: 0, text: "", json: null, at: Date.now(),
+          error: err && err.message ? err.message : String(err),
+        };
+      }
+    }));
   }
 
   function countStatements(stmts) {
@@ -959,7 +1040,12 @@ ${blocks(rest, 1)}</main>
 </html>`;
   }
 
-  const api = { run, compile: run, render, COLORS };
+  async function runAsync(source) {
+    await prefetchLinks(source);
+    return run(source, { links: linkCache });
+  }
+
+  const api = { run, runAsync, prefetchLinks, compile: run, render, COLORS };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.Dery = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);
