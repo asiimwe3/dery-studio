@@ -356,7 +356,7 @@
       const codePart = hashAt === -1 ? line : line.slice(0, hashAt);
       const commentPart = hashAt === -1 ? "" : line.slice(hashAt);
       let html = esc(codePart);
-      html = html.replace(/"[^"]*"/g, (m) => { quoted.push(m); return "\u0000" + (quoted.length - 1) + "\u0000"; });
+      html = html.replace(/"[^"]*"/g, (m) => { quoted.push(m); return "\uE000" + String.fromCharCode(65 + quoted.length - 1) + "\uE001"; });
       html = html.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="hl-num">$1</span>');
       CONNECT.forEach((c) => { html = html.split(c).join('<span class="hl-con">' + c + "</span>"); });
       let lower = html.toLowerCase();
@@ -368,7 +368,7 @@
           lower = html.toLowerCase();
         }
       });
-      html = html.replace(/\u0000(\d+)\u0000/g, (m, i) => '<span class="hl-str">' + quoted[Number(i)] + "</span>");
+      html = html.replace(/\uE000([A-Z])\uE001/g, (m, ch) => '<span class="hl-str">' + quoted[ch.charCodeAt(0) - 65] + "</span>");
       if (commentPart) html += '<span class="hl-cmt">' + esc(commentPart) + "</span>";
       return html;
     }).join("\n");

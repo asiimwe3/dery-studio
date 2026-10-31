@@ -517,7 +517,19 @@
     }
     if (/^(add|create|make|include)\b.*\b(link|hyperlink)\b/.test(low)) return { type: "link", text: qs[0] || "Link", href: qs[1] || "#" };
     if (/^(add|create|make|include|put)\b.*\b(image|picture|photo|logo)\b/.test(low)) return { type: "image", src: qs[0] || "", alt: qs[1] || "Image" };
-    if (/^(add|create|make|include)\b.*\blist\b/.test(low)) return { type: "list", items: qs.length ? qs : ["First item", "Second item"], ordered: /\bnumbered\b/.test(low) };
+    if (/^(add|create|make|include)\b.*\blist\b/.test(low)) {
+      // a single quoted item followed by "plus <value>" becomes a live expression,
+      // so lists inside loops can change each round ("Add a list with \"Class \" plus it")
+      let items = qs.length ? qs.slice() : ["First item", "Second item"];
+      const tail = text.slice(text.indexOf('"') + 1);
+      if (/\bplus\b/i.test(tail)) {
+        // whole item is an expression, e.g. "Class " plus it plus " is registered"
+        const rest = text.replace(/^.*?\b(?:with|saying|that says|containing)\b/i, "");
+        const parts = parseTextAndExpr(rest);
+        if (parts && parts.length) return { type: "list", expr: parts, grow: true, ordered: /\bnumbered\b/.test(low) };
+      }
+      return { type: "list", items, ordered: /\bnumbered\b/.test(low) };
+    }
     if (/^(add|create|make|include)\b.*\b(contact\s+)?form\b/.test(low)) return { type: "form" };
     if (/^(add|create|make|include)\b.*\bfooter\b/.test(low)) return { type: "footer", text: first || "© 2026 DeryCode" };
     if (/^(add|create|make|include)\b.*\b(divider|line)\b/.test(low)) return { type: "divider" };
@@ -582,7 +594,20 @@
         case "button": targetBlocks().push({ type: "button", text: p.text, href: p.href }); break;
         case "link": targetBlocks().push({ type: "link", text: p.text, href: p.href }); break;
         case "image": targetBlocks().push({ type: "image", src: p.src, alt: p.alt }); break;
-        case "list": targetBlocks().push({ type: "list", items: p.items, ordered: p.ordered }); break;
+        case "list": {
+          let items = p.items || [];
+          if (p.expr) {
+            // each run appends one item, so a loop builds a single growing list
+            const itemText = renderText(textNode(p.expr), scope);
+            const blocksNow = targetBlocks();
+            const lastB = blocksNow[blocksNow.length - 1];
+            if (lastB && lastB.type === "list" && lastB.grow) { lastB.items.push(itemText); return; }
+            blocksNow.push({ type: "list", items: [itemText], ordered: p.ordered, grow: true });
+            return;
+          }
+          targetBlocks().push({ type: "list", items, ordered: p.ordered });
+          break;
+        }
         case "form": targetBlocks().push({ type: "form" }); break;
         case "footer": targetBlocks().push({ type: "footer", text: p.text }); break;
         case "divider": targetBlocks().push({ type: "divider" }); break;
