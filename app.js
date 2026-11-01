@@ -690,22 +690,30 @@
 
   async function addPictureFiles(fileList) {
     const files = Array.from(fileList || []).filter((f) => /^image\//.test(f.type));
-    if (!files.length) return;
+    if (!files.length) return [];
+    const added = [];
     $("stateText").textContent = "Adding " + files.length + " picture" + (files.length > 1 ? "s" : "") + "...";
     for (const f of files) {
       try {
         const dataUrl = await shrinkImage(f, 1400, 0.82);
-        const name = uniqueName(safeName(f.name));
+        // pictures pasted from the clipboard arrive without a real name
+        const raw = String(f.name || "").replace(/\.[a-z0-9]+$/i, "");
+        const base = !raw || /^(image|blob|clipboard|pasted|img)[-_ .]?\d*$/i.test(raw) ? "photo" : raw;
+        const name = uniqueName(safeName(base));
         pics[name] = dataUrl;
+        added.push(name);
       } catch (err) {
         $("stateText").textContent = "Skipped " + f.name + ": " + err.message;
       }
     }
     if (savePics()) {
-      $("stateText").textContent = "Pictures saved. Use their names in your code.";
+      $("stateText").textContent = added.length
+        ? "Picture saved as " + added.map((n) => '"' + n + '"').join(", ") + "."
+        : "Pictures saved.";
       run(true);
     }
     renderPics();
+    return added;
   }
 
   function renderPics() {
@@ -763,6 +771,82 @@
   }
 
   window.__deryAddPictures = addPictureFiles;
+
+  /* ── paste a picture straight into the code ──────────────────────────
+     Copy an image (or a screenshot), put the cursor on a line, press
+     Ctrl+V. The picture is saved and the sentence is written for you.
+     ─────────────────────────────────────────────────────────────────── */
+  function insertLines(lines) {
+    const text = ed.value;
+    const at = ed.selectionStart != null ? ed.selectionStart : text.length;
+    const before = text.slice(0, at);
+    const after = text.slice(at);
+    const glue = before && !/\n$/.test(before) ? "\n" : "";
+    const add = glue + lines.join("\n") + "\n";
+    ed.value = before + add + after;
+    const pos = (before + add).length;
+    ed.setSelectionRange(pos, pos);
+    refresh();
+    run(false);
+  }
+
+  function pictureSentence(name) {
+    return 'Add an image called "' + name + '".';
+  }
+
+  async function handlePastedImages(files, urls) {
+    const names = files && files.length ? await addPictureFiles(files) : [];
+    const lines = names.map(pictureSentence)
+      .concat((urls || []).map((u) => 'Add an image showing "' + u + '".'));
+    if (!lines.length) return false;
+    insertLines(lines);
+    $("stateText").textContent = names.length
+      ? "Pasted picture saved as " + names.map((n) => '"' + n + '"').join(", ") + " and added to your code."
+      : "Added the picture link to your code.";
+    return true;
+  }
+
+  function imagesFrom(clipboard) {
+    const files = [];
+    const urls = [];
+    if (!clipboard) return { files, urls };
+    if (clipboard.files && clipboard.files.length) {
+      Array.from(clipboard.files).forEach((f) => { if (/^image\//.test(f.type)) files.push(f); });
+    }
+    if (!files.length && clipboard.items) {
+      Array.from(clipboard.items).forEach((it) => {
+        if (it.kind === "file" && /^image\//.test(it.type)) {
+          const f = it.getAsFile();
+          if (f) files.push(f);
+        }
+      });
+    }
+    const text = clipboard.getData ? clipboard.getData("text/plain") || "" : "";
+    const match = text.trim().match(/^https?:\/\/\S+\.(png|jpe?g|gif|webp|avif|svg)(\?\S*)?$/i);
+    if (match) urls.push(text.trim());
+    return { files, urls };
+  }
+
+  ed.addEventListener("paste", async (e) => {
+    const { files, urls } = imagesFrom(e.clipboardData);
+    if (!files.length && !urls.length) return;   // ordinary text paste behaves normally
+    e.preventDefault();
+    await handlePastedImages(files, urls);
+  });
+
+  $("pics").addEventListener("paste", async (e) => {
+    const { files, urls } = imagesFrom(e.clipboardData);
+    if (!files.length && !urls.length) return;
+    e.preventDefault();
+    const names = files.length ? await addPictureFiles(files) : [];
+    (urls || []).forEach((u) => {
+      const name = uniqueName(safeName((u.split("/").pop() || "photo").replace(/\.[a-z0-9]+$/i, "")) || "photo");
+      pics[name] = u;
+      savePics();
+    });
+    renderPics();
+    $("stateText").textContent = "Picture saved. Its name is now in the Pictures list.";
+  });
 
   // drag photos straight onto the window
   ["dragover", "drop"].forEach((ev) => {
