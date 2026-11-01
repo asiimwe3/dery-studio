@@ -819,7 +819,7 @@
     if (/^(use|set)\b.*\bheading\s+font\b/.test(low) || /^(use|set)\b.*\bfont\b.*\bheadings?\b/.test(low)) {
       return { type: "headingFont", value: first || (text.match(/\bfont\s+(.+)$/i) || [])[1] || "" };
     }
-    if (/^(use|set)\b.*\bfont\b/.test(low)) return { type: "font", value: first || text.replace(/.*\bfont\b\s*/i, "").trim() };
+    if (/^(use|set|add|choose|pick)\b.*\bfont\b/.test(low)) return { type: "font", value: first || text.replace(/.*\bfont\b\s*/i, "").trim() };
     if (/\boutline\s+buttons?\b/.test(low)) return { type: "btnStyle", value: "outline" };
     if (/\b(solid|filled)\s+buttons?\b/.test(low)) return { type: "btnStyle", value: "solid" };
     if (/\bghost\s+buttons?\b/.test(low)) return { type: "btnStyle", value: "ghost" };
@@ -885,10 +885,266 @@
   }
 
   /* ── interpreter ──────────────────────────────────────────────────── */
+
+  /* ── templates: ready-made sites a team member can start from ───────
+     Writing    Use the hotel template.
+     expands to the finished sentences below, which they can then edit.
+     ─────────────────────────────────────────────────────────────────── */
+  const TEMPLATES = {
+    hotel: {
+      name: "Hotel or Lodge",
+      about: "Rooms with prices, gallery, reviews, questions, map and WhatsApp booking.",
+      lines: [
+        '# HOTEL TEMPLATE — replace the names in quotes with your own',
+        'Create a website called "Your Lodge".',
+        'Set the page description to "Comfortable rooms, good food and warm service."',
+        'Use a warm theme.',
+        'Add the font Poppins.',
+        'Add a navigation bar with "Home", "Rooms", "Dining", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Sleep well tonight" using the picture "lobby".',
+        'Add a big heading that says "Our rooms".',
+        'Add a card called "Standard Room" saying "Warm bed, hot water, free breakfast." with the picture "room1" for 90000.',
+        'Add a card called "Deluxe Room" saying "Bigger room, garden view, breakfast for two." with the picture "room2" for 150000.',
+        'Add a photo gallery with "lobby", "room1", "room2", "food1" in 2 columns.',
+        'Add a big heading that says "Our menu".',
+        'Add a price list with "Breakfast" at 15000, "Lunch" at 25000, "Dinner" at 30000.',
+        'Add a big heading that says "What guests say".',
+        'Add a testimonial from "A guest from Kampala" saying "Quiet, clean and the food was excellent."',
+        'Add a question "Is parking available?" with the answer "Yes, free parking inside the compound."',
+        'Add a question "Do you take mobile money?" with the answer "Yes, MTN and Airtel Money are accepted."',
+        'Add a big heading that says "Find us".',
+        'Add a contact section with phone "+256700000000" and email "stay@yoursite.ug" and address "Main street, your town".',
+        'Add a map of "Kyenjojo town".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    restaurant: {
+      name: "Restaurant or Bar",
+      about: "Menu with prices, food pictures, opening hours, map and WhatsApp orders.",
+      lines: [
+        '# RESTAURANT TEMPLATE',
+        'Create a website called "Your Restaurant".',
+        'Set the page description to "Fresh food, fair prices, open every day."',
+        'Use a bold theme.',
+        'Add a navigation bar with "Menu", "Gallery", "Hours", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Hot food, served with a smile" using the picture "food1".',
+        'Add a big heading that says "Today on the menu".',
+        'Add a price list with "Chicken and chips" at 18000, "Beef pilau" at 12000, "Matooke and goat" at 15000, "Soda" at 2000.',
+        'Add a photo gallery with "food1", "food2", "drink1", "inside1" in 2 columns.',
+        'Add a big heading that says "When we are open".',
+        'Add the opening hours with "Monday to Friday" from "8am to 10pm", "Saturday" from "9am to 11pm", "Sunday" from "10am to 8pm".',
+        'Add a testimonial from "A regular customer" saying "The pilau here is the best in town."',
+        'Add a button that says "Order on WhatsApp" that opens "https://wa.me/256700000000".',
+        'Add a contact section with phone "+256700000000" and address "Market street, your town".',
+        'Add a map of "Kyenjojo town".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    shop: {
+      name: "Online Shop",
+      about: "Products with prices and photos, delivery steps, WhatsApp ordering.",
+      lines: [
+        '# SHOP TEMPLATE — add your product pictures first',
+        'Create a website called "Your Shop".',
+        'Set the page description to "Quality items delivered anywhere in Uganda."',
+        'Use a fresh theme.',
+        'Add the font Poppins.',
+        'Add a logo using the picture "logo".',
+        'Add a navigation bar with "Shop", "How to order", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Everything you need, delivered" using the picture "banner".',
+        'Add a big heading that says "Our products".',
+        'Add a product called "Product one" saying "Tell the customer what it is and what size." with the picture "product1" for 25000.',
+        'Add a product called "Product two" saying "Another short, honest description." with the picture "product2" for 40000.',
+        'Add a product called "Product three" saying "One more product you sell." with the picture "product3" for 15000.',
+        'Add a big heading that says "How to order".',
+        'Add the steps "Choose your item", "Send the name on WhatsApp", "Pay by mobile money", "We deliver to your town".',
+        'Add a question "How long does delivery take?" with the answer "Same day inside town, next day upcountry."',
+        'Add a contact section with phone "+256700000000" and email "orders@yourshop.ug".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    sacco: {
+      name: "SACCO or Microfinance",
+      about: "Savings and loan products, joining steps, questions, contacts.",
+      lines: [
+        '# SACCO TEMPLATE',
+        'Create a website called "Your SACCO".',
+        'Set the page description to "Savings and affordable loans for our members."',
+        'Use a light theme.',
+        'Add a navigation bar with "Savings", "Loans", "Join", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Save small, grow big" using the picture "banner".',
+        'Add a big heading that says "What we offer".',
+        'Add a card called "Ordinary savings" saying "Save any amount, withdraw when you need it." for 0.',
+        'Add a card called "Business loan" saying "Up to three times your savings, repaid in twelve months." for 0.',
+        'Add a card called "Emergency loan" saying "Quick money for school fees and sickness." for 0.',
+        'Add a big heading that says "How to join".',
+        'Add the steps "Bring your national ID", "Pay the membership fee", "Start saving", "Apply for a loan when ready".',
+        'Add a question "Do you accept mobile money?" with the answer "Yes, deposits by MTN and Airtel Money are accepted."',
+        'Add a question "How much interest do you charge?" with the answer "One percent per month on the reducing balance."',
+        'Add a contact section with phone "+256700000000" and email "info@yoursacco.ug" and address "SACCO offices, your town".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    school: {
+      name: "School or College",
+      about: "Classes, fees, admission steps, questions and contacts.",
+      lines: [
+        '# SCHOOL TEMPLATE',
+        'Create a website called "Your School".',
+        'Set the page description to "A happy school with strong results and caring teachers."',
+        'Use a light theme.',
+        'Add a navigation bar with "About", "Classes", "Fees", "Admissions", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Learn well, grow well" using the picture "school".',
+        'Add a big heading that says "Our classes".',
+        'Add a card called "Nursery" saying "Baby class to top class, play and learn." with the picture "nursery".',
+        'Add a card called "Primary" saying "Primary one to seven, with a library and computer room." with the picture "primary".',
+        'Add a card called "O level" saying "Senior one to four, science laboratories available." with the picture "secondary".',
+        'Add a big heading that says "Fees per term".',
+        'Add a price list with "Nursery day" at 350000, "Primary day" at 450000, "Primary boarding" at 750000, "O level boarding" at 950000.',
+        'Add a big heading that says "How to join".',
+        'Add the steps "Collect the form from the office", "Fill it and bring a report card", "Pay the first term", "Buy uniform and start".',
+        'Add a question "Do you provide transport?" with the answer "Yes, a school van covers nearby trading centres."',
+        'Add a contact section with phone "+256700000000" and email "office@yourschool.ug" and address "Your town".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    clinic: {
+      name: "Clinic or Pharmacy",
+      about: "Services, opening hours, location, quick contact.",
+      lines: [
+        '# CLINIC TEMPLATE',
+        'Create a website called "Your Clinic".',
+        'Set the page description to "Friendly staff, quick service and affordable medicine."',
+        'Use a fresh theme.',
+        'Add a navigation bar with "Services", "Hours", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Care you can trust" using the picture "clinic".',
+        'Add a big heading that says "What we do".',
+        'Add a card called "Outpatient care" saying "Consultation, malaria tests and medicines." with the picture "service1".',
+        'Add a card called "Maternal health" saying "Antenatal check-ups and safe delivery advice." with the picture "service2".',
+        'Add a card called "Pharmacy" saying "Affordable medicines, always in stock." with the picture "service3".',
+        'Add a big heading that says "When we are open".',
+        'Add the opening hours with "Monday to Saturday" from "8am to 8pm", "Sunday" from "9am to 2pm".',
+        'Add a question "Do you accept insurance?" with the answer "We accept the main local insurance cards."',
+        'Add a contact section with phone "+256700000000" and address "Your town".',
+        'Add a map of "Kyenjojo town".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    church: {
+      name: "Church or NGO",
+      about: "Mission, programmes, gallery, giving and contacts.",
+      lines: [
+        '# CHURCH / NGO TEMPLATE',
+        'Create a website called "Your Organisation".',
+        'Set the page description to "Serving our community with love and action."',
+        'Use a minimal theme.',
+        'Add a navigation bar with "About", "Programmes", "Gallery", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Serving our community together" using the picture "banner".',
+        'Add a big heading that says "Who we are".',
+        'Add a paragraph that says "We work with families in our town through faith, education and practical help."',
+        'Add a big heading that says "Our programmes".',
+        'Add a card called "Sunday service" saying "Worship and teaching for all ages." with the picture "programme1".',
+        'Add a card called "Youth group" saying "Sports, mentorship and skills for young people." with the picture "programme2".',
+        'Add a card called "Community help" saying "Food support and school materials for families in need." with the picture "programme3".',
+        'Add a photo gallery with "programme1", "programme2", "programme3" in 3 columns.',
+        'Add a testimonial from "A community member" saying "This group stood with us when we had nothing."',
+        'Add a contact section with phone "+256700000000" and email "hello@yourorg.ug".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    salon: {
+      name: "Salon or Barbershop",
+      about: "Service prices, styles gallery, hours, WhatsApp booking.",
+      lines: [
+        '# SALON TEMPLATE',
+        'Create a website called "Your Salon".',
+        'Set the page description to "Looking good, feeling good, every visit."',
+        'Use a luxury theme.',
+        'Add a navigation bar with "Services", "Styles", "Book", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "Look your best today" using the picture "salon".',
+        'Add a big heading that says "Our prices".',
+        'Add a price list with "Haircut" at 8000, "Braiding" at 35000, "Treatment" at 20000, "Make up" at 25000.',
+        'Add a photo gallery with "style1", "style2", "style3", "style4" in 2 columns.',
+        'Add the opening hours with "Monday to Saturday" from "9am to 8pm".',
+        'Add a button that says "Book on WhatsApp" that opens "https://wa.me/256700000000".',
+        'Add a contact section with phone "+256700000000" and address "Your town".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    portfolio: {
+      name: "Personal or Portfolio",
+      about: "Who you are, what you do, work samples and contact.",
+      lines: [
+        '# PORTFOLIO TEMPLATE',
+        'Create a website called "Your Name".',
+        'Set the page description to "My work and how to reach me."',
+        'Use a dark theme.',
+        'Add the font Space Grotesk.',
+        'Add a hero with "I build things for the web" using the picture "me".',
+        'Add a big heading that says "What I do".',
+        'Add a card called "Websites" saying "Fast, clean sites for small businesses." with the picture "work1".',
+        'Add a card called "Systems" saying "Records, reports and dashboards that save time." with the picture "work2".',
+        'Add a card called "Training" saying "Teaching teams to use the tools they pay for." with the picture "work3".',
+        'Add a photo gallery with "work1", "work2", "work3" in 3 columns.',
+        'Add a contact section with phone "+256700000000" and email "me@yoursite.com".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+    business: {
+      name: "Any Business",
+      about: "A clean one page site for any company or service.",
+      lines: [
+        '# BUSINESS TEMPLATE',
+        'Create a website called "Your Business".',
+        'Set the page description to "What you do, in one clear sentence."',
+        'Use a light theme.',
+        'Add a navigation bar with "Services", "About", "Contact".',
+        'Make the navigation sticky.',
+        'Add a hero with "We solve one problem, very well" using the picture "banner".',
+        'Add a big heading that says "Our services".',
+        'Add a card called "Service one" saying "Explain the service in one plain sentence." with the picture "service1".',
+        'Add a card called "Service two" saying "Explain the next service." with the picture "service2".',
+        'Add a card called "Service three" saying "And the third." with the picture "service3".',
+        'Add a big heading that says "Why clients choose us".',
+        'Add the steps "You tell us the problem", "We give a price the same day", "We deliver on time".',
+        'Add a testimonial from "A happy client" saying "They finished early and explained everything."',
+        'Add a question "How do I pay?" with the answer "Mobile money, bank transfer, or cash in the office."',
+        'Add a contact section with phone "+256700000000" and email "hello@yourbusiness.ug".',
+        'Add a floating WhatsApp button for "+256700000000".',
+      ],
+    },
+  };
+
+  function expandTemplates(source) {
+    const out = [];
+    String(source).split(/\r?\n/).forEach((line) => {
+      const m = line.trim().match(/^(?:use|start with|start from|load|import|apply|open)\s+(?:the\s+)?([a-z]+)\s+template\.?$/i);
+      if (m) {
+        const key = m[1].toLowerCase();
+        const t = TEMPLATES[key];
+        if (t) {
+          out.push("# ── " + t.name + " template ──");
+          out.push.apply(out, t.lines);
+          return;
+        }
+      }
+      out.push(line);
+    });
+    return out.join("\n");
+  }
+
   function run(source, options) {
     const opts = options || {};
     const links = opts.links || linkCache;
-    const { program, errors } = parseProgram(source);
+    const { program, errors } = parseProgram(expandTemplates(source));
 
     const page = {
       title: "My Website", bg: "#FFFFFF", text: "#111827",
@@ -1387,7 +1643,13 @@
 
   function render(page) {
     const A = page.assets || {};
-    const src = (v) => (!v ? "" : (A[v] || v));
+    const src = (v) => {
+      if (!v) return "";
+      if (A[v]) return A[v];
+      if (/^(https?:|data:|\/|\.\/)/i.test(v)) return v;
+      return "";
+    };
+    const missingPic = (v) => !!v && !src(v);
     function blocks(list, indent) {
       const pad = "  ".repeat(indent || 1);
       return list.map((b) => {
@@ -1406,6 +1668,11 @@
           }
           case "hero": {
             const u = src(b.image);
+            if (!u && b.image) {
+              return `${pad}<section class="hero hero-empty" style="${b.height ? `min-height:${Number(b.height)}px;` : ""}">\n` +
+                `${pad}  <div class="hero-in"><h1>${esc(b.title || "")}</h1><p class="hero-hint">Add the picture "${esc(b.image)}" in the Pictures panel.</p></div>\n` +
+                `${pad}</section>\n`;
+            }
             return `${pad}<section class="hero${u ? " has-pic" : ""}"${u ? ` style="background-image:url('${esc(u)}');${b.height ? `min-height:${Number(b.height)}px;` : ""}"` : (b.height ? ` style="min-height:${Number(b.height)}px"` : "")}>\n` +
               `${pad}  <div class="hero-in">${b.title ? `<h1>${esc(b.title)}</h1>` : ""}</div>\n` +
               `${pad}</section>\n`;
@@ -1414,7 +1681,7 @@
             return `${pad}<div class="cards">\n` + b.items.map((c) => {
               const u = src(c.image);
               return `${pad}  <article class="card">\n` +
-                (u ? `${pad}    <img src="${esc(u)}" alt="${esc(c.title)}" loading="lazy" />\n` : "") +
+                (u ? `${pad}    <img src="${esc(u)}" alt="${esc(c.title)}" loading="lazy" />\n` : (c.image ? `${pad}    <div class="card-photo-empty">${esc(c.image)}</div>\n` : "")) +
                 `${pad}    <div class="card-body">\n` +
                 (c.title ? `${pad}      <h3>${esc(c.title)}</h3>\n` : "") +
                 (c.text ? `${pad}      <p>${esc(c.text)}</p>\n` : "") +
@@ -1545,6 +1812,9 @@ ${page.favicon ? `<link rel="icon" href="${esc(src(page.favicon))}" />` : ""}
   .hero h1 { position: relative; z-index: 1; margin: 0; }
   .hero.has-pic h1 { color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,0.45); }
   .hero-in { position: relative; z-index: 1; width: 100%; }
+  .hero-empty { background: linear-gradient(135deg, ${page.accent}22, ${page.accent}05); border: 1px dashed ${page.accent}66; align-items: center; }
+  .hero-hint { font-size: 13px; opacity: 0.75; margin: 6px 0 0; }
+  .card-photo-empty { height: 190px; display: grid; place-items: center; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.5; background: rgba(128,128,128,0.14); }
 
   /* cards */
   .cards { display: grid; gap: ${Math.round(page.space * 0.7)}px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin: 12px 0 ${page.space}px; }
@@ -1622,7 +1892,7 @@ ${page.whatsapp ? `<a class="wa-float" href="https://wa.me/${esc(String(page.wha
     return run(source, { links: linkCache, assets: (options && options.assets) || {} });
   }
 
-  const api = { run, runAsync, prefetchLinks, compile: run, render, COLORS };
+  const api = { run, runAsync, prefetchLinks, compile: run, render, COLORS, TEMPLATES, expandTemplates };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.Dery = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

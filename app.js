@@ -176,6 +176,13 @@
     'Add a map of "Kyenjojo town"',
     'Add the steps "Choose your size", "Send payment", "We deliver"',
     'Add a logo using the picture "logo"',
+    "Use the hotel template.",
+    "Use the restaurant template.",
+    "Use the shop template.",
+    "Use the sacco template.",
+    "Use the school template.",
+    "Use the business template.",
+    "Add the font Poppins",
   ];
 
   let acItems = [], acIdx = 0, acStart = -1, acOpen = false;
@@ -552,6 +559,58 @@
   $("menuBtn").addEventListener("click", () => { $("side").classList.contains("on") ? closeSide() : openSide(); });
   $("scrim").addEventListener("click", closeSide);
   $("newFileBtn").addEventListener("click", newFile);
+
+  // ── templates: start a new file from a finished site ─────────────────
+  function templateList() {
+    const T = (window.Dery && window.Dery.TEMPLATES) || {};
+    return Object.keys(T).map((key) => ({ key, name: T[key].name, about: T[key].about, lines: T[key].lines.length }));
+  }
+
+  function useTemplate(key) {
+    const T = (window.Dery && window.Dery.TEMPLATES) || {};
+    const t = T[key];
+    if (!t) return;
+    const fileName = key + ".dery";
+    const existing = store.files.find((f) => f.name.toLowerCase() === fileName);
+    if (existing) {
+      store.active = existing.id;
+      ed.value = 'Use the ' + key + ' template.';
+      existing.code = ed.value;
+    } else {
+      const f = { id: "f" + Date.now(), name: fileName, code: 'Use the ' + key + ' template.' };
+      store.files.push(f);
+      store.active = f.id;
+      ed.value = f.code;
+    }
+    saveStore();
+    renderFiles();
+    refresh();
+    run(true);
+    $("tpl").classList.remove("on");
+    $("stateText").textContent = t.name + " template loaded. Change the words in quotes, then add pictures.";
+  }
+
+  function renderTemplates() {
+    const grid = $("tplGrid");
+    if (grid.children.length) return;
+    templateList().forEach((t) => {
+      const b = document.createElement("button");
+      b.className = "tpl";
+      const title = document.createElement("b");
+      title.textContent = t.name;
+      const about = document.createElement("span");
+      about.textContent = t.about;
+      const tag = document.createElement("em");
+      tag.textContent = t.lines + " sentences";
+      b.append(title, about, tag);
+      b.addEventListener("click", () => useTemplate(t.key));
+      grid.appendChild(b);
+    });
+  }
+
+  $("tplBtn").addEventListener("click", () => { renderTemplates(); $("tpl").classList.add("on"); });
+  $("tpl").addEventListener("click", (e) => { if (e.target === $("tpl")) $("tpl").classList.remove("on"); });
+  $("tplDone").addEventListener("click", () => $("tpl").classList.remove("on"));
 
   // ── picture library: photos from this device, kept with the project ───
   const PIC_STORE = "dery.pictures.v1";

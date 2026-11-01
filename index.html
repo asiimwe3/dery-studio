@@ -175,6 +175,16 @@
     .gutter div { height: 20px; }
   }
   @media (min-width: 881px) { .mini-tabs { display: none; } .scrim { display: none !important; } }
+  .tplgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .tpl {
+    text-align: left; padding: 12px; border-radius: 12px; border: 1px solid var(--bd);
+    background: var(--panel2); color: var(--t1); cursor: pointer; font: inherit;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+  .tpl:hover { border-color: var(--or); }
+  .tpl b { font-size: 13.5px; }
+  .tpl span { font-size: 11.5px; color: var(--t3); line-height: 1.45; }
+  .tpl em { font-style: normal; font-size: 10.5px; color: var(--or2); font-weight: 700; letter-spacing: 0.04em; }
   .picgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
   .pic { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--bd); background: var(--panel2); }
   .pic img { width: 100%; height: 78px; object-fit: cover; display: block; }
@@ -203,6 +213,7 @@
       <div class="sub">write in plain english</div>
     </div>
     <div class="spacer"></div>
+    <button class="ghost" id="tplBtn">Templates</button>
     <button class="ghost" id="picsBtn">Pictures</button>
     <button class="ghost" id="designBtn">Design</button>
     <button class="ghost" id="helpBtn">How to write</button>
@@ -272,6 +283,22 @@
     <span id="statCursor">Ln 1, Col 1</span>
   </div>
 
+  <div class="sheet" id="tpl">
+    <div class="sheet-in">
+      <h3>Templates</h3>
+      <p class="hint">Start from a finished site, then change the words and add your pictures. Each one writes itself into a new file you can edit.</p>
+      <div class="tplgrid" id="tplGrid"></div>
+      <h4>Or type it yourself</h4>
+      <div class="ref">
+        <div>Use the hotel template.</div>
+        <div>Use the restaurant template.   Use the shop template.</div>
+        <div>Use the sacco template.   Use the school template.   Use the clinic template.</div>
+        <div>Use the church template.   Use the salon template.   Use the portfolio template.   Use the business template.</div>
+      </div>
+      <button class="primary" id="tplDone" style="width:100%;margin-top:14px">Done</button>
+    </div>
+  </div>
+
   <div class="sheet" id="pics">
     <div class="sheet-in">
       <h3>Pictures</h3>
@@ -336,6 +363,14 @@
         <div>Add a contact form.   Add a footer that says <i>"..."</i>.</div>
         <div>Make the background color dark.   Set the text color to white.</div>
         <div>Make the buttons orange.   Center everything.   Use a wide layout.</div>
+      </div>
+
+      <h4>Templates</h4>
+      <div class="ref">
+        <div>Tap <b>Templates</b> and pick one, or type:</div>
+        <div>Use the hotel template.   Use the restaurant template.   Use the shop template.</div>
+        <div>Use the sacco template.   Use the school template.   Use the clinic template.</div>
+        <div>Use the church template.   Use the salon template.   Use the portfolio template.   Use the business template.</div>
       </div>
 
       <h4>Pictures from your computer</h4>
@@ -462,8 +497,8 @@
     });
   })();
 </script>
-<script src="dery2.js?v=1793525078"></script>
-<script src="app.js?v=1793525078"></script>
+<script src="dery2.js?v=1793525425"></script>
+<script src="app.js?v=1793525425"></script>
 
 </body>
 </html>
