@@ -260,7 +260,7 @@
   }
 
   // ── run ──────────────────────────────────────────────────────────────
-  let lastHtml = "", runTimer = null;
+  let lastHtml = "", lastPages = [], pageAt = 0, runTimer = null;
 
   async function run(reveal) {
     const btn = $("runBtn");
@@ -292,8 +292,11 @@
       showView("out");
       return;
     }
-    lastHtml = res.html || "";
+    lastPages = (res.pages && res.pages.length) ? res.pages : [{ name: "Page", slug: "index", html: res.html || "" }];
+    if (pageAt >= lastPages.length) pageAt = 0;
+    lastHtml = lastPages[pageAt].html || "";
     badLines = (res.errors || []).map((e) => e.line).filter(Boolean);
+    renderPagePicker();
     $("site").srcdoc = lastHtml;
     const out = res.output || [];
     $("console").innerHTML = out.length
@@ -927,6 +930,91 @@
   $("design").addEventListener("click", (e) => { if (e.target === $("design")) $("design").classList.remove("on"); });
   $("designDone").addEventListener("click", () => $("design").classList.remove("on"));
 
+  // ── pages: preview one at a time ─────────────────────────────────────
+  function renderPagePicker() {
+    const bar = $("pageBar");
+    if (!bar) return;
+    bar.innerHTML = "";
+    if (lastPages.length < 2) { bar.style.display = "none"; return; }
+    bar.style.display = "flex";
+    lastPages.forEach((p, i) => {
+      const b = document.createElement("button");
+      b.className = "page-tab" + (i === pageAt ? " on" : "");
+      b.textContent = p.name;
+      b.onclick = () => {
+        pageAt = i;
+        lastHtml = p.html;
+        $("site").srcdoc = lastHtml;
+        renderPagePicker();
+      };
+      bar.appendChild(b);
+    });
+  }
+
+  // ── save a whole site: every page inside one zip ─────────────────────
+  function crc32(buf) {
+    let c, crc = 0xFFFFFFFF;
+    for (let i = 0; i < buf.length; i++) {
+      c = (crc ^ buf[i]) & 0xFF;
+      for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xEDB88320 : c >>> 1;
+      crc = (crc >>> 8) ^ c;
+    }
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  function zipOf(files) {
+    const enc = new TextEncoder();
+    const chunks = [], central = [];
+    let offset = 0;
+    files.forEach((f) => {
+      const name = enc.encode(f.name);
+      const data = enc.encode(f.text);
+      const crc = crc32(data);
+      const local = new DataView(new ArrayBuffer(30));
+      local.setUint32(0, 0x04034b50, true);
+      local.setUint16(4, 20, true);
+      local.setUint16(6, 0x0800, true);
+      local.setUint16(8, 0, true);
+      local.setUint16(10, 0, true);
+      local.setUint16(12, 0, true);
+      local.setUint32(14, crc, true);
+      local.setUint32(18, data.length, true);
+      local.setUint32(22, data.length, true);
+      local.setUint16(26, name.length, true);
+      local.setUint16(28, 0, true);
+      chunks.push(new Uint8Array(local.buffer), name, data);
+
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true);
+      cd.setUint16(4, 20, true);
+      cd.setUint16(6, 20, true);
+      cd.setUint16(8, 0x0800, true);
+      cd.setUint16(10, 0, true);
+      cd.setUint16(12, 0, true);
+      cd.setUint16(14, 0, true);
+      cd.setUint32(16, crc, true);
+      cd.setUint32(20, data.length, true);
+      cd.setUint32(24, data.length, true);
+      cd.setUint16(28, name.length, true);
+      cd.setUint16(30, 0, true);
+      cd.setUint16(32, 0, true);
+      cd.setUint16(34, 0, true);
+      cd.setUint16(36, 0, true);
+      cd.setUint32(38, 0, true);
+      cd.setUint32(42, offset, true);
+      central.push(new Uint8Array(cd.buffer), name);
+      offset += 30 + name.length + data.length;
+    });
+    const cdSize = central.reduce((n, c) => n + c.length, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true);
+    end.setUint16(8, files.length, true);
+    end.setUint16(10, files.length, true);
+    end.setUint32(12, cdSize, true);
+    end.setUint32(16, offset, true);
+    return new Blob([...chunks, ...central, new Uint8Array(end.buffer)], { type: "application/zip" });
+  }
+
   // ── help sheet ───────────────────────────────────────────────────────
   $("helpBtn").addEventListener("click", () => $("sheet").classList.add("on"));
   $("sheet").addEventListener("click", (e) => { if (e.target === $("sheet")) $("sheet").classList.remove("on"); });
@@ -934,14 +1022,25 @@
   // ── run + save buttons ───────────────────────────────────────────────
   $("runBtn").addEventListener("click", () => { hideAc(); run(true); });
   $("saveHtmlBtn").addEventListener("click", () => {
-    run();
     const name = (activeFile().name || "site").replace(/\.dery$/i, "");
-    const blob = new Blob([lastHtml || "<!doctype html><title>Empty</title>"], { type: "text/html" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name + ".html";
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    const grab = (cb) => {
+      run().then(() => cb()).catch(() => cb());
+    };
+    grab(() => {
+      const files = (lastPages.length ? lastPages : [{ file: "index.html", html: lastHtml }])
+        .map((p, i) => ({ name: p.file || (i === 0 ? "index.html" : "page-" + (i + 1) + ".html"), text: p.html || "" }))
+        .filter((f) => f.text);
+      if (!files.length) return;
+      const blob = files.length > 1 ? zipOf(files) : new Blob([files[0].text], { type: "text/html" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = files.length > 1 ? name + "-site.zip" : files[0].name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      $("stateText").textContent = files.length > 1
+        ? files.length + " pages saved in " + name + "-site.zip"
+        : "Page saved as " + files[0].name;
+    });
   });
 
   // ── boot ─────────────────────────────────────────────────────────────

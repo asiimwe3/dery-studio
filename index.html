@@ -126,6 +126,9 @@
   /* right side */
   .right { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid var(--bd); }
   iframe#site { flex: 1; border: 0; background: #fff; width: 100%; }
+  .page-bar { display: none; gap: 6px; padding: 8px 10px; overflow-x: auto; border-bottom: 1px solid #23262d; background: #14161a; }
+  .page-bar .page-tab { flex: 0 0 auto; border: 1px solid #2b2f37; background: #1a1d22; color: #c9ced8; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .page-bar .page-tab.on { background: #FF8A00; border-color: #FF8A00; color: #111; }
   .console {
     flex: 1; overflow: auto; padding: 12px 14px; margin: 0;
     font: 12.5px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; color: #d7e0ea; white-space: pre-wrap;
@@ -263,6 +266,7 @@
         <div class="spacer"></div>
         <span class="badge" id="liveBadge">live</span>
       </div>
+      <div class="page-bar" id="pageBar"></div>
       <iframe id="site" title="Your website" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-same-origin"></iframe>
       <pre class="console hidden" id="console"><span class="empty">Nothing printed yet. Use Show to print values.</span></pre>
       <div class="term hidden" id="term">
@@ -369,6 +373,13 @@
         <div>Make the buttons orange.   Center everything.   Use a wide layout.</div>
       </div>
 
+      <h4>Many pages</h4>
+      <div class="ref">
+        <div>New page called <i>"Rooms"</i>.   then keep adding things - they go on that page.</div>
+        <div>Every page keeps the look of the page before it, so you only change what is different.</div>
+        <div>Navigation items called Home, Rooms, Contact link to those pages by themselves.</div>
+        <div>Preview each page with the tabs above the website. <b>Save HTML</b> gives every page in one zip.</div>
+      </div>
       <h4>Templates</h4>
       <div class="ref">
         <div>Tap <b>Templates</b> and pick one, or type:</div>
@@ -502,8 +513,8 @@
     });
   })();
 </script>
-<script src="dery2.js?v=1793526287"></script>
-<script src="app.js?v=1793526287"></script>
+<script src="dery2.js?v=1793526685"></script>
+<script src="app.js?v=1793526685"></script>
 
 </body>
 </html>

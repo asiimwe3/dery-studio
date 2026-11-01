@@ -496,6 +496,15 @@
           continue;
         }
 
+        /* ── start another page ──────────────────────────────────── */
+        const newPage = line.text.match(/^(?:new|start|add|create|open)\s+(?:a\s+|an\s+|another\s+)?(?:new\s+)?page\s*(?:called|named|for|:)?\s*"([^"]+)"/i)
+          || line.text.match(/^(?:new|start|add|create|open)\s+(?:a\s+|an\s+|another\s+)?(?:new\s+)?page\s*(?:called|named|for)\s+([A-Za-z][A-Za-z ]*?)\s*\.?$/i);
+        if (newPage) {
+          stmts.push({ k: "newpage", title: newPage[1].trim(), line: line.n });
+          idx++;
+          continue;
+        }
+
         /* ── open a link and keep the answer ─────────────────────── */
         const getLink = line.text.match(/^(?:get|open|read|load|fetch|bring)\s+(?:the\s+)?(?:(?:link|page|url|web ?page|data|answer)\s+)?(?:"([^"]+)"|(\S+))\s+(?:in ?to|as|inside)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\.?$/i);
         if (getLink) {
@@ -649,6 +658,9 @@
     const first = qs[0] || "";
 
     // ══ pictures from your computer (named in the picture library) ══
+    const heroOnly = text.match(/^add\s+(?:a\s+)?(?:hero|cover|banner)\s+(?:that\s+)?(?:says|saying|with|reads)\s+"([^"]+)"/i);
+    if (heroOnly && !/\b(picture|image|photo)\b/i.test(low)) return { type: "heroText", title: heroOnly[1] };
+
     const heroPic = text.match(/^(?:add|use|put)\s+(?:a\s+)?(?:hero|cover|banner)\b[\s\S]*?\b(?:picture|image|photo)\b\s*(?:called|named)?\s*"([^"]+)"/i)
       || text.match(/^(?:add|use|put)\s+(?:a\s+)?(?:hero|cover|banner)\s+(?:called|named)\s+"([^"]+)"/i);
     if (heroPic) {
@@ -1146,7 +1158,7 @@
     const links = opts.links || linkCache;
     const { program, errors } = parseProgram(expandTemplates(source));
 
-    const page = {
+    let page = {
       title: "My Website", bg: "#FFFFFF", text: "#111827",
       font: "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       fontName: "Inter",
@@ -1166,6 +1178,40 @@
     let sectionStack = [];
 
     let callDepth = 0;
+    const pageList = [];
+
+    function slugify(name) {
+      return String(name || "page").toLowerCase().replace(/&/g, " and ")
+        .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "page";
+    }
+
+    // keep the page that was just finished, then start the next one with the
+    // same look so a team does not restyle every page by hand
+    function finishPage() {
+      if (!page) return;
+      const key = slugify(page.title);
+      const used = pageList.map((p) => p.slug);
+      let slug = key;
+      let n = 2;
+      while (used.includes(slug)) { slug = key + "-" + n; n++; }
+      page.slug = slug;
+      pageList.push(page);
+    }
+
+    function freshPage(title) {
+      const copy = JSON.parse(JSON.stringify({
+        bg: page.bg, text: page.text, accent: page.accent, font: page.font, fontName: page.fontName,
+        headingFont: page.headingFont, center: page.center, width: page.width,
+        radius: page.radius, shadow: page.shadow, space: page.space, fontSize: page.fontSize,
+        btnSize: page.btnSize, btnStyle: page.btnStyle, sticky: page.sticky, navBg: page.navBg,
+        hero: page.hero, customCss: page.customCss, assets: page.assets,
+      }));
+      return Object.assign(copy, {
+        title: title || "Page " + (pageList.length + 1),
+        blocks: [], customHtml: "", pageList: [],
+      });
+    }
+
     const rt = {
       warn(msg) { runtimeErrors.push({ message: msg }); },
       error(msg) { runtimeErrors.push({ message: msg }); },
@@ -1232,6 +1278,9 @@
           break;
         case "sticky": page.sticky = !!p.value; break;
         case "navbg": page.navBg = p.value || ""; break;
+        case "heroText":
+          targetBlocks().push({ type: "hero", title: p.title || "", image: "", height: 320 });
+          break;
         case "hero":
           if (p.image) targetBlocks().push({ type: "hero", title: p.title || "", image: p.image, height: p.height });
           else { page.hero = p.value; page.heroHeight = p.height || 320; }
@@ -1403,6 +1452,11 @@
             scope.set(st.target, rec.title || (rec.json ? String(rec.json.title || "") : ""));
             break;
           }
+          case "newpage": {
+            finishPage();
+            page = freshPage(st.title);
+            break;
+          }
           case "fetch": {
             const url = String(evalExpr(st.url, scope, rt) || "");
             const rec = links[url];
@@ -1433,12 +1487,25 @@
       });
     }
 
+    finishPage();
+    const allPages = pageList.slice();
+    if (!allPages.length) allPages.push(page);
+    allPages[0].slug = "index";
+
     let html = "";
-    try { html = render(page); } catch (err) { html = ""; }
+    const rendered = [];
+    allPages.forEach((p) => {
+      p.assets = page.assets;
+      let out = "";
+      try { out = render(p, allPages); } catch (err) { out = ""; }
+      rendered.push({ name: p.title, slug: p.slug, file: p.slug + ".html", html: out });
+    });
+    html = rendered[0] ? rendered[0].html : "";
 
     return {
       html,
-      page,
+      pages: rendered,
+      page: allPages[0],
       output,
       errors: errors.concat(runtimeErrors.map((e) => ({ line: 0, message: e.message, hint: "" }))),
       stats: { sentences: countStatements(program), steps },
@@ -1641,8 +1708,9 @@
   const GOOGLE_FONTS = ["Inter", "Poppins", "Montserrat", "Lato", "Nunito", "Raleway", "Open Sans",
     "Roboto", "Playfair Display", "Merriweather", "Oswald", "Source Sans 3", "DM Sans", "Space Grotesk"];
 
-  function render(page) {
+  function render(page, pagesIn) {
     const A = page.assets || {};
+    const PAGES = (pagesIn || []).map((p) => ({ title: p.title, slug: p.slug, file: p.slug + ".html" }));
     const src = (v) => {
       if (!v) return "";
       if (A[v]) return A[v];
@@ -1654,8 +1722,25 @@
       const pad = "  ".repeat(indent || 1);
       return list.map((b) => {
         switch (b.type) {
-          case "nav":
-            return `${pad}<nav class="nav">\n${b.items.map((s) => `${pad}  <a href="#${esc(String(s).toLowerCase().replace(/\s+/g, "-"))}">${esc(s)}</a>`).join("\n")}\n${pad}</nav>\n`;
+          case "nav": {
+            const link = (label) => {
+              const want = String(label).toLowerCase().trim();
+              if (want === "home" || want === "index" || want === "start") {
+                const first = (PAGES || [])[0];
+                if (first) return first.slug === page.slug ? "" : first.file;
+                return "#home";
+              }
+              const hit = (PAGES || []).find((x) => String(x.title).toLowerCase().trim() === want || x.slug === want.replace(/[^a-z0-9]+/g, "-"));
+              if (hit) return (hit.slug === page.slug ? "" : hit.file);
+              return "#" + want.replace(/[^a-z0-9]+/g, "-");
+            };
+            const items = b.items.map((s) => {
+              const href = link(s);
+              const cur = href === "" ? ' class="on"' : "";
+              return `${pad}  <a href="${esc(href || "#")}"${cur}>${esc(s)}</a>`;
+            });
+            return `${pad}<nav class="nav">\n${items.join("\n")}\n${pad}</nav>\n`;
+          }
           case "heading": return `${pad}<h${b.level}>${esc(b.text)}</h${b.level}>\n`;
           case "paragraph": return `${pad}<p>${esc(b.text)}</p>\n`;
           case "button": return `${pad}<a class="btn" href="${esc(b.href)}"${b.href && b.href !== "#" ? ' target="_blank" rel="noopener noreferrer"' : ""}>${esc(b.text)}</a>\n`;
