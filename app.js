@@ -566,18 +566,19 @@
     return Object.keys(T).map((key) => ({ key, name: T[key].name, about: T[key].about, lines: T[key].lines.length }));
   }
 
-  function useTemplate(key) {
+  function useTemplate(key, expand) {
     const T = (window.Dery && window.Dery.TEMPLATES) || {};
     const t = T[key];
     if (!t) return;
-    const fileName = key + ".dery";
+    const fileName = (expand ? key + "-edited.dery" : key + ".dery");
+    const body = expand ? t.lines.join("\n") : 'Use the ' + key + ' template.';
     const existing = store.files.find((f) => f.name.toLowerCase() === fileName);
     if (existing) {
       store.active = existing.id;
-      ed.value = 'Use the ' + key + ' template.';
-      existing.code = ed.value;
+      ed.value = body;
+      existing.code = body;
     } else {
-      const f = { id: "f" + Date.now(), name: fileName, code: 'Use the ' + key + ' template.' };
+      const f = { id: "f" + Date.now(), name: fileName, code: body };
       store.files.push(f);
       store.active = f.id;
       ed.value = f.code;
@@ -603,7 +604,23 @@
       const tag = document.createElement("em");
       tag.textContent = t.lines + " sentences";
       b.append(title, about, tag);
-      b.addEventListener("click", () => useTemplate(t.key));
+      const row = document.createElement("div");
+      row.className = "tpl-row";
+
+      const useBtn = document.createElement("button");
+      useBtn.className = "tpl-go";
+      useBtn.textContent = "Use";
+      useBtn.title = "Start a new file from this template";
+      useBtn.addEventListener("click", (e) => { e.stopPropagation(); useTemplate(t.key, false); });
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "tpl-alt";
+      editBtn.textContent = "Open all sentences";
+      editBtn.title = "Copy every sentence into the editor so you can change them";
+      editBtn.addEventListener("click", (e) => { e.stopPropagation(); useTemplate(t.key, true); });
+
+      row.append(useBtn, editBtn);
+      b.append(row);
       grid.appendChild(b);
     });
   }

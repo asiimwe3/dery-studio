@@ -185,6 +185,10 @@
   .tpl b { font-size: 13.5px; }
   .tpl span { font-size: 11.5px; color: var(--t3); line-height: 1.45; }
   .tpl em { font-style: normal; font-size: 10.5px; color: var(--or2); font-weight: 700; letter-spacing: 0.04em; }
+  .tpl-row { display: flex; gap: 6px; margin-top: auto; padding-top: 8px; }
+  .tpl-row button { flex: 1; font-size: 11px; font-weight: 700; padding: 6px 4px; border-radius: 8px; cursor: pointer; border: 1px solid var(--bd); background: transparent; color: var(--t2); }
+  .tpl-go { background: var(--or) !important; color: #111 !important; border-color: var(--or) !important; }
+  .tpl-alt:hover, .tpl-go:hover { filter: brightness(1.06); }
   .picgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
   .pic { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--bd); background: var(--panel2); }
   .pic img { width: 100%; height: 78px; object-fit: cover; display: block; }
@@ -2967,18 +2971,19 @@ ${page.whatsapp ? `<a class="wa-float" href="https://wa.me/${esc(String(page.wha
     return Object.keys(T).map((key) => ({ key, name: T[key].name, about: T[key].about, lines: T[key].lines.length }));
   }
 
-  function useTemplate(key) {
+  function useTemplate(key, expand) {
     const T = (window.Dery && window.Dery.TEMPLATES) || {};
     const t = T[key];
     if (!t) return;
-    const fileName = key + ".dery";
+    const fileName = (expand ? key + "-edited.dery" : key + ".dery");
+    const body = expand ? t.lines.join("\n") : 'Use the ' + key + ' template.';
     const existing = store.files.find((f) => f.name.toLowerCase() === fileName);
     if (existing) {
       store.active = existing.id;
-      ed.value = 'Use the ' + key + ' template.';
-      existing.code = ed.value;
+      ed.value = body;
+      existing.code = body;
     } else {
-      const f = { id: "f" + Date.now(), name: fileName, code: 'Use the ' + key + ' template.' };
+      const f = { id: "f" + Date.now(), name: fileName, code: body };
       store.files.push(f);
       store.active = f.id;
       ed.value = f.code;
@@ -3004,7 +3009,23 @@ ${page.whatsapp ? `<a class="wa-float" href="https://wa.me/${esc(String(page.wha
       const tag = document.createElement("em");
       tag.textContent = t.lines + " sentences";
       b.append(title, about, tag);
-      b.addEventListener("click", () => useTemplate(t.key));
+      const row = document.createElement("div");
+      row.className = "tpl-row";
+
+      const useBtn = document.createElement("button");
+      useBtn.className = "tpl-go";
+      useBtn.textContent = "Use";
+      useBtn.title = "Start a new file from this template";
+      useBtn.addEventListener("click", (e) => { e.stopPropagation(); useTemplate(t.key, false); });
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "tpl-alt";
+      editBtn.textContent = "Open all sentences";
+      editBtn.title = "Copy every sentence into the editor so you can change them";
+      editBtn.addEventListener("click", (e) => { e.stopPropagation(); useTemplate(t.key, true); });
+
+      row.append(useBtn, editBtn);
+      b.append(row);
       grid.appendChild(b);
     });
   }
