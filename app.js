@@ -171,6 +171,11 @@
     'Add a contact section with phone "+256762306675" and email "stay@lodge.ug"',
     'Add a floating WhatsApp button for "+256762306675"',
     'Add an image called "lobby"',
+    'Add a product called "Ankara Dress" saying "Cotton, sizes 8 to 16." for 85000',
+    'Add the opening hours with "Mon to Fri" from "8am to 6pm"',
+    'Add a map of "Kyenjojo town"',
+    'Add the steps "Choose your size", "Send payment", "We deliver"',
+    'Add a logo using the picture "logo"',
   ];
 
   let acItems = [], acIdx = 0, acStart = -1, acOpen = false;

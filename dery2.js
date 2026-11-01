@@ -664,7 +664,7 @@
       return { type: "gallery", items: names, columns: Number((text.match(/\b(\d)\s+columns?\b/i) || [])[1]) || 3 };
     }
 
-    const card = text.match(/^add\s+(?:a\s+)?card\b/i);
+    const card = text.match(/^add\s+(?:a\s+)?(?:card|product|item|dish|room)\b/i);
     if (card) {
       const t = text.match(/\b(?:called|titled|named|for)\s+"([^"]+)"/i);
       const b = text.match(/\b(?:saying|that says|with the text|reading)\s+"([^"]+)"/i);
@@ -730,7 +730,29 @@
     const sectionBg = text.match(/^add\s+(?:a\s+)?section\s+(?:called|named|titled)\s+"([^"]+)"\s+(?:with|using)\s+the\s+(?:background\s+)?(?:picture|image|photo)\s+(?:called|named)\s+"([^"]+)"/i);
     if (sectionBg) return { type: "sectionStart", title: sectionBg[1], bgImage: sectionBg[2] };
 
-    const steps = text.match(/^add\s+(?:the\s+)?(?:number|step)\s*(?:list|steps)\b/i);
+    const video = text.match(/^add\s+(?:a\s+)?(?:video|youtube)\b/i);
+    if (video && qs[0]) return { type: "video", src: qs[0] };
+
+    const map = text.match(/^add\s+(?:a\s+)?map\b/i);
+    if (map) return { type: "map", place: qs[0] || (text.match(/\b(?:of|for|showing)\s+(.+)$/i) || [, ""])[1] };
+
+    const hours = text.match(/^add\s+(?:the\s+)?(?:opening\s+)?hours\b/i);
+    if (hours) {
+      const pairs = [];
+      const re = /"([^"]+)"\s*(?:at|from|=|-|:)?\s*"?([0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)?\s*(?:-|to)\s*[0-9]{1,2}(?::[0-9]{2})?\s*(?:am|pm)?)"?/gi;
+      let m;
+      while ((m = re.exec(text))) pairs.push({ label: m[1], price: m[2] });
+      if (!pairs.length) for (let i = 0; i + 1 < qs.length; i += 2) pairs.push({ label: qs[i], price: qs[i + 1] });
+      return { type: "hours", items: pairs };
+    }
+
+    const logo = text.match(/^add\s+(?:a\s+)?logo\b/i);
+    if (logo) {
+      const pic = text.match(/\b(?:picture|image|photo)\b\s*(?:called|named)?\s*"([^"]+)"/i);
+      return { type: "logo", src: pic ? pic[1] : (qs[0] || "") };
+    }
+
+    const steps = text.match(/^add\s+(?:the\s+)?(?:number|num|step)s?(?:\s+list)?\b/i);
     if (steps && qs.length) return { type: "steps", items: qs.slice() };
 
     if (/^(create|make|start|build)\b.*\b(page|website|site|document)\b/.test(low)) {
@@ -965,6 +987,10 @@
         case "nav": targetBlocks().push({ type: "nav", items: p.items }); break;
         case "gallery": targetBlocks().push({ type: "gallery", items: p.items, columns: p.columns }); break;
         case "steps": targetBlocks().push({ type: "steps", items: p.items }); break;
+        case "video": targetBlocks().push({ type: "video", src: p.src }); break;
+        case "map": targetBlocks().push({ type: "map", place: p.place }); break;
+        case "hours": targetBlocks().push({ type: "hours", items: p.items }); break;
+        case "logo": targetBlocks().push({ type: "logo", src: p.src }); break;
         case "prices": targetBlocks().push({ type: "prices", items: p.items }); break;
         case "contact": targetBlocks().push({ type: "contact", phone: p.phone, email: p.email, address: p.address }); break;
         case "footerNav": targetBlocks().push({ type: "footerNav", items: p.items, phone: p.phone }); break;
@@ -1406,6 +1432,22 @@
             return `${pad}<ul class="prices">\n` + b.items.map((it) =>
               `${pad}  <li><span class="p-name">${esc(it.label)}</span><span class="dots"></span><span class="p-amt">UGX ${esc(it.price)}</span></li>\n`
             ).join("") + `${pad}</ul>\n`;
+          case "video": {
+            const u = String(b.src || "");
+            const id = (u.match(/(?:youtu\.be\/|v=)([A-Za-z0-9_-]{6,})/) || [])[1];
+            if (id) return `${pad}<div class="video"><iframe src="https://www.youtube.com/embed/${esc(id)}" title="Video" loading="lazy" allowfullscreen></iframe></div>\n`;
+            return `${pad}<div class="video"><iframe src="${esc(u)}" title="Video" loading="lazy" allowfullscreen></iframe></div>\n`;
+          }
+          case "map":
+            return `${pad}<div class="map"><iframe src="https://maps.google.com/maps?q=${encodeURIComponent(b.place || "Kyenjojo Uganda")}&output=embed" title="Map" loading="lazy"></iframe></div>\n`;
+          case "hours":
+            return `${pad}<ul class="prices hours">\n` + b.items.map((it) =>
+              `${pad}  <li><span class="p-name">${esc(it.label)}</span><span class="dots"></span><span class="p-amt">${esc(it.price)}</span></li>\n`
+            ).join("") + `${pad}</ul>\n`;
+          case "logo": {
+            const u = src(b.src);
+            return u ? `${pad}<img class="logo" src="${esc(u)}" alt="Logo" />\n` : "";
+          }
           case "steps":
             return `${pad}<ol class="steps">\n` + b.items.map((it) => `${pad}  <li>${esc(it)}</li>\n`).join("") + `${pad}</ol>\n`;
           case "quotes":
@@ -1551,6 +1593,10 @@ ${page.favicon ? `<link rel="icon" href="${esc(src(page.favicon))}" />` : ""}
   .btn.wa { background: #25D366; }
 
   /* footer navigation */
+  .video, .map { position: relative; width: 100%; aspect-ratio: 16 / 9; margin: 12px 0 ${page.space}px; border-radius: ${page.radius}px; overflow: hidden; background: rgba(128,128,128,0.12); }
+  .video iframe, .map iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .map { aspect-ratio: 16 / 10; }
+  img.logo { max-width: 160px; height: auto; margin: 8px 0 16px; border-radius: 8px; }
   .wrapnav { display: flex; flex-wrap: wrap; gap: 16px; margin: 36px 0 8px; padding-top: 18px; border-top: 1px solid rgba(128,128,128,0.25); font-size: 14px; font-weight: 600; }
   .wrapnav a { color: inherit; text-decoration: none; opacity: 0.85; }
   .props { font-size: 13px; opacity: 0.7; }
