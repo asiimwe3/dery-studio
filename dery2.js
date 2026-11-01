@@ -648,6 +648,91 @@
     const qs = quoted(text);
     const first = qs[0] || "";
 
+    // ══ pictures from your computer (named in the picture library) ══
+    const heroPic = text.match(/^(?:add|use|put)\s+(?:a\s+)?(?:hero|cover|banner)\b[\s\S]*?\b(?:picture|image|photo)\b\s*(?:called|named)?\s*"([^"]+)"/i)
+      || text.match(/^(?:add|use|put)\s+(?:a\s+)?(?:hero|cover|banner)\s+(?:called|named)\s+"([^"]+)"/i);
+    if (heroPic) {
+      // the heading is whichever other quoted words appear
+      const words = qs.filter((q) => q !== heroPic[1]);
+      const h = text.match(/\b(?:says|saying|that says|with the heading|heading)\s+"([^"]+)"/i);
+      return { type: "hero", image: heroPic[1], title: h ? h[1] : (words[0] || ""), height: (text.match(/\b(\d{3})\s*(?:pixels|px|tall)\b/i) || [])[1] };
+    }
+
+    const gallery = text.match(/^add\s+(?:a\s+)?(?:photo\s+|picture\s+)?gallery\b/i);
+    if (gallery) {
+      const names = qs.slice();
+      return { type: "gallery", items: names, columns: Number((text.match(/\b(\d)\s+columns?\b/i) || [])[1]) || 3 };
+    }
+
+    const card = text.match(/^add\s+(?:a\s+)?card\b/i);
+    if (card) {
+      const t = text.match(/\b(?:called|titled|named|for)\s+"([^"]+)"/i);
+      const b = text.match(/\b(?:saying|that says|with the text|reading)\s+"([^"]+)"/i);
+      const pic = text.match(/\b(?:picture|image|photo)\b\s*(?:called|named)?\s*"([^"]+)"/i);
+      const price = text.match(/\b(?:for|at)\s+(?:ugx\s*)?([\d,]+)/i);
+      const btn = text.match(/\b(?:button|link)\s+"([^"]+)"/i);
+      return {
+        type: "card",
+        title: t ? t[1] : (b ? "" : (qs[0] || "Card")),
+        text: b ? b[1] : "",
+        image: pic ? pic[1] : "",
+        price: price ? price[1] : "",
+        button: btn ? btn[1] : "",
+      };
+    }
+
+    const priceList = text.match(/^add\s+(?:a\s+)?(?:price|menu)\s*(?:list|table)?\b/i) && /\bprice|menu\b/i.test(low);
+    if (priceList) {
+      const pairs = [];
+      const re = /"([^"]+)"\s*(?:at|for|=|-|:)?\s*(?:ugx\s*)?([\d,]{2,})/gi;
+      let m;
+      while ((m = re.exec(text))) pairs.push({ label: m[1], price: m[2].replace(/[^0-9]/g, "") });
+      if (!pairs.length) {
+        for (let i = 0; i + 1 < qs.length; i += 2) pairs.push({ label: qs[i], price: qs[i + 1] });
+      }
+      return { type: "prices", items: pairs };
+    }
+
+    const question = text.match(/^add\s+(?:a\s+)?(?:question|faq)\s+"([^"]+)"\s*(?:with\s+the\s+answer|answered?|saying)?\s*"?([^"]*)"?/i);
+    if (question) {
+      return { type: "faqItem", q: question[1], a: (qs[1] || "").trim() };
+    }
+
+    const testimonial = text.match(/^add\s+(?:a\s+)?(?:testimonial|review|quote)\b/i);
+    if (testimonial) {
+      const who = text.match(/\b(?:from|by)\s+"([^"]+)"/i);
+      const what = text.match(/\b(?:saying|that says|reading)\s+"([^"]+)"/i);
+      return { type: "quote", text: what ? what[1] : (qs[0] || ""), who: who ? who[1] : (qs[1] || "") };
+    }
+
+    const contact = text.match(/^add\s+(?:a\s+)?contact\b/i);
+    if (contact) {
+      const phone = text.match(/\b(?:phone|tel|call|whatsapp)\s*"+?([+0-9][0-9\s-]{6,})/i);
+      const email = text.match(/\bemail\s+"?([^"\s,]+@[^"\s,]+)/i);
+      const addr = text.match(/\b(?:address|located at|at)\s+"([^"]+)"/i);
+      return {
+        type: "contact",
+        phone: phone ? phone[1].trim() : (qs[0] && /[+0-9]/.test(qs[0]) ? qs[0] : ""),
+        email: email ? email[1] : "",
+        address: addr ? addr[1] : "",
+      };
+    }
+
+    const waFloat = text.match(/^add\s+(?:a\s+)?(?:floating|sticky|fixed)\s+whatsapp\b.*?([+0-9][0-9\s-]{6,})/i);
+    if (waFloat) return { type: "whatsappFloat", phone: waFloat[1].trim().replace(/\s+/g, "") };
+
+    const footNav = text.match(/^add\s+(?:a\s+)?(?:footer|bottom)\b/i);
+    if (footNav && qs.length > 1) {
+      const phone = text.match(/\b(?:phone|call|whatsapp)\s*"+?([+0-9][0-9\s-]{6,})/i);
+      return { type: "footerNav", items: qs.slice(), phone: phone ? phone[1].trim() : (text.match(/\b([+0-9][0-9\s-]{8,})/) ? text.match(/\b([+0-9][0-9\s-]{8,})/)[1].trim() : "") };
+    }
+
+    const sectionBg = text.match(/^add\s+(?:a\s+)?section\s+(?:called|named|titled)\s+"([^"]+)"\s+(?:with|using)\s+the\s+(?:background\s+)?(?:picture|image|photo)\s+(?:called|named)\s+"([^"]+)"/i);
+    if (sectionBg) return { type: "sectionStart", title: sectionBg[1], bgImage: sectionBg[2] };
+
+    const steps = text.match(/^add\s+(?:the\s+)?(?:number|step)\s*(?:list|steps)\b/i);
+    if (steps && qs.length) return { type: "steps", items: qs.slice() };
+
     if (/^(create|make|start|build)\b.*\b(page|website|site|document)\b/.test(low)) {
       return { type: "title", value: first || (text.match(/\b(?:called|named)\s+(.+)$/i) || [, "My Website"])[1] };
     }
@@ -699,7 +784,7 @@
     if (navColor) return { type: "navbg", value: pickColor(text, qs) };
 
     // ── a hero / cover image across the top ──
-    if (/^(add|use|put)\b.*\b(hero|cover|banner)\b.*\bimage|picture|photo/.test(low) && qs[0]) {
+    if (/^(add|use|put)\b.*\b(hero|cover|banner)\b.*\b(image|picture|photo)\b/.test(low) && qs[0]) {
       return { type: "hero", value: qs[0], height: (text.match(/\b(\d{3})\s*(?:pixels|px|tall)\b/i) || [])[1] };
     }
 
@@ -709,7 +794,20 @@
     const html = text.match(/^(?:add|put|insert)\s+(?:my\s+)?(?:custom\s+)?(?:code|html)\s*(?:saying|that says|:)?\s*"([^"]*)"/i);
     if (html) return { type: "customHtml", value: html[1] };
 
+    if (/^(use|set)\b.*\bheading\s+font\b/.test(low) || /^(use|set)\b.*\bfont\b.*\bheadings?\b/.test(low)) {
+      return { type: "headingFont", value: first || (text.match(/\bfont\s+(.+)$/i) || [])[1] || "" };
+    }
     if (/^(use|set)\b.*\bfont\b/.test(low)) return { type: "font", value: first || text.replace(/.*\bfont\b\s*/i, "").trim() };
+    if (/\boutline\s+buttons?\b/.test(low)) return { type: "btnStyle", value: "outline" };
+    if (/\b(solid|filled)\s+buttons?\b/.test(low)) return { type: "btnStyle", value: "solid" };
+    if (/\bghost\s+buttons?\b/.test(low)) return { type: "btnStyle", value: "ghost" };
+    if (/^set\s+the\s+(?:page\s+)?description\b/.test(low) && first) return { type: "description", value: first };
+    if (/^set\s+the\s+favicon\b/.test(low)) return { type: "favicon", value: qs[0] || (text.match(/(?:favicon|to)\s+(?:the\s+)?(?:picture|image)\s+(?:called|named)?\s*"?([^"]+)"?$/i) || [])[1] || "" };
+    if (/^(add|put)\s+(?:a\s+)?whatsapp\s+button\b/.test(low)) {
+      const ph = text.match(/([+0-9][0-9\s-]{6,})/);
+      return { type: "whatsapp", value: ph ? ph[1].trim().replace(/\s+/g, "") : "" };
+    }
+    if (/^set\s+the\s+(?:social|sharing)\s+(?:image|picture)\b/.test(low)) return { type: "ogImage", value: qs[0] || "" };
     if (/^(center|centre)\b/.test(low)) return { type: "center" };
     if (/\b(wide|full width|narrow)\b/.test(low) && /\b(make|set|use)\b/.test(low)) return { type: "width", value: /\bwide|full width\b/.test(low) ? "wide" : "narrow" };
     if (/^(add|create|make|include)\b.*\bnav(igation)?\b/.test(low)) return { type: "nav", items: qs.length ? qs : ["Home", "About", "Contact"] };
@@ -778,7 +876,10 @@
       radius: 12, shadow: "soft", space: 24, fontSize: 17,
       btnSize: "normal", sticky: false, navBg: "",
       hero: "", customCss: "", customHtml: "",
+      assets: {}, headingFont: "", btnStyle: "solid",
+      description: "", favicon: "", whatsapp: "", ogImage: "",
     };
+    page.assets = opts.assets || {};
     const output = [];
     const runtimeErrors = [];
     const funcs = Object.create(null);
@@ -853,12 +954,50 @@
           break;
         case "sticky": page.sticky = !!p.value; break;
         case "navbg": page.navBg = p.value || ""; break;
-        case "hero": page.hero = p.value; page.heroHeight = p.height || 320; break;
+        case "hero":
+          if (p.image) targetBlocks().push({ type: "hero", title: p.title || "", image: p.image, height: p.height });
+          else { page.hero = p.value; page.heroHeight = p.height || 320; }
+          break;
         case "customCss": page.customCss = (page.customCss || "") + "\n" + p.value; break;
         case "customHtml": page.customHtml = (page.customHtml || "") + "\n" + p.value; break;
         case "center": page.center = true; break;
         case "width": page.width = p.value === "wide" ? "1100px" : "620px"; break;
         case "nav": targetBlocks().push({ type: "nav", items: p.items }); break;
+        case "gallery": targetBlocks().push({ type: "gallery", items: p.items, columns: p.columns }); break;
+        case "steps": targetBlocks().push({ type: "steps", items: p.items }); break;
+        case "prices": targetBlocks().push({ type: "prices", items: p.items }); break;
+        case "contact": targetBlocks().push({ type: "contact", phone: p.phone, email: p.email, address: p.address }); break;
+        case "footerNav": targetBlocks().push({ type: "footerNav", items: p.items, phone: p.phone }); break;
+        case "whatsappFloat": page.whatsapp = p.phone; break;
+        case "whatsapp": page.whatsapp = p.value || page.whatsapp; break;
+        case "btnStyle": page.btnStyle = p.value; break;
+        case "headingFont": if (p.value) page.headingFont = p.value; break;
+        case "description": page.description = p.value; break;
+        case "favicon": page.favicon = p.value; break;
+        case "ogImage": page.ogImage = p.value; break;
+        case "heroPic": page.hero = p.image; break;
+        case "quote": {
+          // quotes group together into one testimonials strip
+          const b = targetBlocks();
+          const last = b[b.length - 1];
+          if (last && last.type === "quotes") last.items.push({ text: p.text, who: p.who });
+          else b.push({ type: "quotes", items: [{ text: p.text, who: p.who }] });
+          break;
+        }
+        case "faqItem": {
+          const b = targetBlocks();
+          const last = b[b.length - 1];
+          if (last && last.type === "faq") last.items.push({ q: p.q, a: p.a });
+          else b.push({ type: "faq", items: [{ q: p.q, a: p.a }] });
+          break;
+        }
+        case "card": {
+          const b = targetBlocks();
+          const last = b[b.length - 1];
+          if (last && last.type === "cards") last.items.push({ title: p.title, text: p.text, image: p.image, price: p.price, button: p.button });
+          else b.push({ type: "cards", items: [{ title: p.title, text: p.text, image: p.image, price: p.price, button: p.button }] });
+          break;
+        }
         case "heading": targetBlocks().push({ type: "heading", level: p.level, text: renderText(p.text, scope) }); break;
         case "paragraph": targetBlocks().push({ type: "paragraph", text: renderText(p.text, scope) }); break;
         case "button": targetBlocks().push({ type: "button", text: p.text, href: p.href }); break;
@@ -883,7 +1022,7 @@
         case "footer": targetBlocks().push({ type: "footer", text: p.text }); break;
         case "divider": targetBlocks().push({ type: "divider" }); break;
         case "sectionStart": {
-          const s = { type: "section", title: p.title, children: [] };
+          const s = { type: "section", title: p.title, bgImage: p.bgImage || "", children: [] };
           targetBlocks().push(s);
           sectionStack.push(s);
           break;
@@ -1221,6 +1360,8 @@
     "Roboto", "Playfair Display", "Merriweather", "Oswald", "Source Sans 3", "DM Sans", "Space Grotesk"];
 
   function render(page) {
+    const A = page.assets || {};
+    const src = (v) => (!v ? "" : (A[v] || v));
     function blocks(list, indent) {
       const pad = "  ".repeat(indent || 1);
       return list.map((b) => {
@@ -1233,7 +1374,61 @@
           case "link": return `${pad}<p><a class="link" href="${esc(b.href)}"${b.href && b.href !== "#" ? ' target="_blank" rel="noopener noreferrer"' : ""}>${esc(b.text)}</a></p>\n`;
           case "embed":
             return `${pad}<div class="embed"><iframe src="${esc(b.src)}" title="Web page" loading="lazy" style="width:100%;height:${b.height ? Number(b.height) : 460}px;border:0;border-radius:12px;background:#fff" referrerpolicy="no-referrer"></iframe>${"\n"}${pad}  <p class="embed-note"><a href="${esc(b.src)}" target="_blank" rel="noopener noreferrer">Open this page in a browser</a></p>${"\n"}${pad}</div>\n`;
-          case "image": return b.src ? `${pad}<img src="${esc(b.src)}" alt="${esc(b.alt)}" />\n` : `${pad}<div class="img-placeholder">Image</div>\n`;
+          case "image": {
+            const u = src(b.src);
+            return u ? `${pad}<img src="${esc(u)}" alt="${esc(b.alt)}" loading="lazy" />\n` : `${pad}<div class="img-placeholder">Picture: ${esc(b.src || "choose one")}</div>\n`;
+          }
+          case "hero": {
+            const u = src(b.image);
+            return `${pad}<section class="hero${u ? " has-pic" : ""}"${u ? ` style="background-image:url('${esc(u)}');${b.height ? `min-height:${Number(b.height)}px;` : ""}"` : (b.height ? ` style="min-height:${Number(b.height)}px"` : "")}>\n` +
+              `${pad}  <div class="hero-in">${b.title ? `<h1>${esc(b.title)}</h1>` : ""}</div>\n` +
+              `${pad}</section>\n`;
+          }
+          case "cards":
+            return `${pad}<div class="cards">\n` + b.items.map((c) => {
+              const u = src(c.image);
+              return `${pad}  <article class="card">\n` +
+                (u ? `${pad}    <img src="${esc(u)}" alt="${esc(c.title)}" loading="lazy" />\n` : "") +
+                `${pad}    <div class="card-body">\n` +
+                (c.title ? `${pad}      <h3>${esc(c.title)}</h3>\n` : "") +
+                (c.text ? `${pad}      <p>${esc(c.text)}</p>\n` : "") +
+                (c.price ? `${pad}      <p class="card-price">UGX ${esc(c.price)}</p>\n` : "") +
+                (c.button ? `${pad}      <a class="btn" href="#" target="_self">${esc(c.button)}</a>\n` : "") +
+                `${pad}    </div>\n` +
+                `${pad}  </article>\n`;
+            }).join("") + `${pad}</div>\n`;
+          case "gallery":
+            return `${pad}<div class="gallery g${b.columns || 3}">\n` + b.items.map((it) => {
+              const u = src(it);
+              return u ? `${pad}  <img src="${esc(u)}" alt="Gallery picture" loading="lazy" />\n` : `${pad}  <div class="img-placeholder">${esc(it)}</div>\n`;
+            }).join("") + `${pad}</div>\n`;
+          case "prices":
+            return `${pad}<ul class="prices">\n` + b.items.map((it) =>
+              `${pad}  <li><span class="p-name">${esc(it.label)}</span><span class="dots"></span><span class="p-amt">UGX ${esc(it.price)}</span></li>\n`
+            ).join("") + `${pad}</ul>\n`;
+          case "steps":
+            return `${pad}<ol class="steps">\n` + b.items.map((it) => `${pad}  <li>${esc(it)}</li>\n`).join("") + `${pad}</ol>\n`;
+          case "quotes":
+            return `${pad}<div class="quotes">\n` + b.items.map((q) =>
+              `${pad}  <figure class="quote"><blockquote>${esc(q.text)}</blockquote>${q.who ? `<figcaption>${esc(q.who)}</figcaption>` : ""}</figure>\n`
+            ).join("") + `${pad}</div>\n`;
+          case "faq":
+            return `${pad}<div class="faq">\n` + b.items.map((f) =>
+              `${pad}  <details><summary>${esc(f.q)}</summary><p>${esc(f.a)}</p></details>\n`
+            ).join("") + `${pad}</div>\n`;
+          case "contact": {
+            const wa = (b.phone || "").replace(/[^0-9]/g, "");
+            return `${pad}<div class="contact">\n` +
+              (b.address ? `${pad}  <p class="c-addr">${esc(b.address)}</p>\n` : "") +
+              (b.phone ? `${pad}  <p><a class="btn" href="tel:${esc(b.phone)}">Call ${esc(b.phone)}</a>${wa ? ` <a class="btn wa" href="https://wa.me/${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>` : ""}</p>\n` : "") +
+              (b.email ? `${pad}  <p><a class="link" href="mailto:${esc(b.email)}">${esc(b.email)}</a></p>\n` : "") +
+              `${pad}</div>\n`;
+          }
+          case "footerNav": {
+            const ph = b.phone || "";
+            return `${pad}<nav class="wrapnav">${b.items.map((t) => `<a href="#">${esc(t)}</a>`).join(" ")}</nav>\n` +
+              (ph ? `${pad}<p class="props">${esc(ph)}</p>\n` : "");
+          }
           case "list":
             return b.ordered
               ? `${pad}<ol>\n${b.items.map((s) => `${pad}  <li>${esc(s)}</li>`).join("\n")}\n${pad}</ol>\n`
@@ -1264,10 +1459,16 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${esc(page.title)}</title>
+${page.description ? `<meta name="description" content="${esc(page.description)}" />` : ""}
+<meta property="og:title" content="${esc(page.title)}" />
+${page.description ? `<meta property="og:description" content="${esc(page.description)}" />` : ""}
+${page.ogImage ? `<meta property="og:image" content="${esc(src(page.ogImage))}" />` : ""}
+${page.favicon ? `<link rel="icon" href="${esc(src(page.favicon))}" />` : ""}
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; font-family: ${page.font}; background: ${page.bg}; color: ${page.text}; font-size: ${page.fontSize}px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
   main { max-width: ${page.width}; margin: 0 auto; padding: 32px 20px 64px; ${page.center ? "text-align: center;" : ""} }
+  h1, h2, h3 { ${page.headingFont ? `font-family: "${page.headingFont}", ${page.font};` : ""} }
   h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 16px; letter-spacing: -0.02em; }
   h2 { font-size: clamp(20px, 4vw, 28px); margin: 32px 0 12px; letter-spacing: -0.01em; }
   p { margin: 0 0 16px; opacity: 0.92; }
@@ -1275,6 +1476,8 @@
   .nav a { color: inherit; text-decoration: none; font-weight: 600; font-size: 14px; opacity: 0.85; }
   .btn { display: inline-block; background: ${page.accent}; color: #fff; padding: ${page.btnSize === "big" ? "16px 32px" : page.btnSize === "small" ? "8px 16px" : "12px 22px"}; border-radius: ${page.radius}px; text-decoration: none; font-weight: 700; font-size: ${page.btnSize === "big" ? "17px" : page.btnSize === "small" ? "13px" : "15px"}; border: none; cursor: pointer; margin: 6px 0 14px; ${page.shadow === "soft" ? `box-shadow: 0 6px 18px ${page.accent}33;` : page.shadow === "strong" ? `box-shadow: 0 12px 30px ${page.accent}55;` : ""} }
   .btn:hover { filter: brightness(1.08); }
+  ${page.btnStyle === "outline" ? `.btn { background: transparent; color: ${page.accent}; border: 2px solid ${page.accent}; }` : ""}
+  ${page.btnStyle === "ghost" ? `.btn { background: rgba(128,128,128,0.14); color: inherit; }` : ""}
   .link { color: ${page.accent}; font-weight: 600; }
   img { max-width: 100%; height: auto; border-radius: ${page.radius}px; display: block; margin: 12px 0; ${page.shadow === "soft" ? "box-shadow: 0 8px 24px rgba(0,0,0,0.10);" : page.shadow === "strong" ? "box-shadow: 0 16px 40px rgba(0,0,0,0.28);" : ""} }
   .hero { position: relative; width: 100%; overflow: hidden; border-radius: ${page.radius}px; margin: 0 0 ${Math.round(page.space * 0.9)}px; }
@@ -1294,7 +1497,68 @@
   .embed-note { font-size: 13px; margin: 6px 0 0; opacity: 0.7; }
   .embed-note a { color: ${page.accent}; font-weight: 600; }
   .footer { margin-top: 40px; padding-top: 20px; font-size: 13px; border-top: 1px solid rgba(128,128,128,0.25); opacity: 0.75; }
-  @media (max-width: 480px) { main { padding: 24px 16px 48px; } .btn { width: 100%; text-align: center; } }
+  /* hero with a picture behind it */
+  .hero { position: relative; display: flex; align-items: flex-end; min-height: 380px; padding: 32px; margin: 0 0 ${page.space}px; border-radius: ${page.radius}px; overflow: hidden; background-size: cover; background-position: center; }
+  .hero.has-pic::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.62) 100%); }
+  .hero h1 { position: relative; z-index: 1; margin: 0; }
+  .hero.has-pic h1 { color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,0.45); }
+  .hero-in { position: relative; z-index: 1; width: 100%; }
+
+  /* cards */
+  .cards { display: grid; gap: ${Math.round(page.space * 0.7)}px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin: 12px 0 ${page.space}px; }
+  .card { background: ${page.cardBg || "rgba(128,128,128,0.07)"}; border: 1px solid rgba(128,128,128,0.18); border-radius: ${page.radius}px; overflow: hidden; text-align: left; ${page.shadow === "soft" ? "box-shadow: 0 8px 22px rgba(0,0,0,0.08);" : page.shadow === "strong" ? "box-shadow: 0 16px 38px rgba(0,0,0,0.22);" : ""} }
+  .card img { width: 100%; height: 190px; object-fit: cover; margin: 0; border-radius: 0; }
+  .card-body { padding: 16px 18px 20px; }
+  .card h3 { margin: 0 0 8px; font-size: 18px; }
+  .card p { margin: 0 0 10px; font-size: 0.96em; opacity: 0.88; }
+  .card-price { font-weight: 800; color: ${page.accent}; }
+
+  /* gallery */
+  .gallery { display: grid; gap: 10px; margin: 12px 0 ${page.space}px; }
+  .gallery.g1 { grid-template-columns: 1fr; }
+  .gallery.g2 { grid-template-columns: repeat(2, 1fr); }
+  .gallery.g3 { grid-template-columns: repeat(3, 1fr); }
+  .gallery.g4 { grid-template-columns: repeat(4, 1fr); }
+  .gallery img { width: 100%; height: 100%; aspect-ratio: 1 / 1; object-fit: cover; margin: 0; border-radius: ${page.radius}px; }
+
+  /* price list */
+  .prices { list-style: none; padding: 0; margin: 12px 0 ${page.space}px; }
+  .prices li { display: flex; align-items: baseline; gap: 10px; padding: 10px 0; border-bottom: 1px dashed rgba(128,128,128,0.3); }
+  .prices .p-name { font-weight: 600; }
+  .prices .dots { flex: 1; border-bottom: 1px dotted rgba(128,128,128,0.45); transform: translateY(-4px); }
+  .prices .p-amt { font-weight: 800; color: ${page.accent}; white-space: nowrap; }
+
+  /* numbered steps */
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 12px 0 ${page.space}px; }
+  .steps li { counter-increment: s; position: relative; padding: 8px 0 8px 44px; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 6px; width: 28px; height: 28px; border-radius: 50%; background: ${page.accent}; color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 14px; }
+
+  /* testimonials */
+  .quotes { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 12px 0 ${page.space}px; }
+  .quote { margin: 0; padding: 20px; border-radius: ${page.radius}px; background: ${page.cardBg || "rgba(128,128,128,0.07)"}; border-left: 4px solid ${page.accent}; }
+  .quote blockquote { margin: 0 0 10px; font-size: 1.02em; }
+  .quote figcaption { font-size: 0.85em; font-weight: 700; opacity: 0.75; }
+
+  /* questions */
+  .faq { margin: 12px 0 ${page.space}px; }
+  .faq details { border-bottom: 1px solid rgba(128,128,128,0.25); padding: 12px 0; }
+  .faq summary { cursor: pointer; font-weight: 700; }
+  .faq p { margin: 8px 0 0; opacity: 0.85; }
+
+  /* contact block */
+  .contact { margin: 12px 0 ${page.space}px; }
+  .contact .c-addr { font-weight: 600; }
+  .btn.wa { background: #25D366; }
+
+  /* footer navigation */
+  .wrapnav { display: flex; flex-wrap: wrap; gap: 16px; margin: 36px 0 8px; padding-top: 18px; border-top: 1px solid rgba(128,128,128,0.25); font-size: 14px; font-weight: 600; }
+  .wrapnav a { color: inherit; text-decoration: none; opacity: 0.85; }
+  .props { font-size: 13px; opacity: 0.7; }
+
+  /* floating WhatsApp */
+  .wa-float { position: fixed; right: 18px; bottom: 18px; z-index: 50; display: inline-flex; align-items: center; gap: 8px; background: #25D366; color: #fff; text-decoration: none; font-weight: 800; padding: 13px 18px; border-radius: 999px; box-shadow: 0 10px 26px rgba(0,0,0,0.28); font-size: 14px; }
+
+  @media (max-width: 480px) { main { padding: 24px 16px 48px; } .btn { width: 100%; text-align: center; } .hero { min-height: 280px; padding: 20px; } .gallery.g3, .gallery.g4 { grid-template-columns: repeat(2, 1fr); } }
 ${page.customCss || ""}
 </style>
 ${GOOGLE_FONTS.includes(page.fontName) ? `<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin /><link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(page.fontName).replace(/%20/g, "+")}:wght@400;600;800&display=swap" rel="stylesheet" />` : ""}
@@ -1302,13 +1566,14 @@ ${GOOGLE_FONTS.includes(page.fontName) ? `<link rel="preconnect" href="https://f
 <body>
 ${navs.length ? navs.map((b) => blocks([b], 0)).join("").replace(/^ {0,2}/gm, "") : ""}<main>
 ${page.hero ? `<div class="hero"><img src="${esc(page.hero)}" alt="Cover" /></div>` : ""}${blocks(rest, 1)}${page.customHtml || ""}</main>
+${page.whatsapp ? `<a class="wa-float" href="https://wa.me/${esc(String(page.whatsapp).replace(/[^0-9]/g, ""))}" target="_blank" rel="noopener">Chat on WhatsApp</a>` : ""}
 </body>
 </html>`;
   }
 
-  async function runAsync(source) {
+  async function runAsync(source, options) {
     await prefetchLinks(source);
-    return run(source, { links: linkCache });
+    return run(source, { links: linkCache, assets: (options && options.assets) || {} });
   }
 
   const api = { run, runAsync, prefetchLinks, compile: run, render, COLORS };

@@ -175,6 +175,13 @@
     .gutter div { height: 20px; }
   }
   @media (min-width: 881px) { .mini-tabs { display: none; } .scrim { display: none !important; } }
+  .picgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; }
+  .pic { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--bd); background: var(--panel2); }
+  .pic img { width: 100%; height: 78px; object-fit: cover; display: block; }
+  .pic b { display: block; font-size: 11px; padding: 5px 6px; font-weight: 600; word-break: break-all; }
+  .pic .row { display: flex; gap: 4px; padding: 0 5px 5px; }
+  .pic .row button { flex: 1; font-size: 10px; padding: 3px 0; border-radius: 6px; border: 1px solid var(--bd); background: transparent; color: var(--t2); cursor: pointer; }
+  .pic .row button:hover { color: var(--or2); border-color: var(--or); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
     padding: 9px 13px; border-radius: 999px; border: 1px solid var(--bd); background: var(--panel2);
@@ -196,6 +203,7 @@
       <div class="sub">write in plain english</div>
     </div>
     <div class="spacer"></div>
+    <button class="ghost" id="picsBtn">Pictures</button>
     <button class="ghost" id="designBtn">Design</button>
     <button class="ghost" id="helpBtn">How to write</button>
     <button id="saveHtmlBtn">Save HTML</button>
@@ -264,6 +272,30 @@
     <span id="statCursor">Ln 1, Col 1</span>
   </div>
 
+  <div class="sheet" id="pics">
+    <div class="sheet-in">
+      <h3>Pictures</h3>
+      <p class="hint">Add photos from your computer or phone. Give each one a short name, then use that name in your code.</p>
+
+      <input type="file" id="picInput" accept="image/*" multiple hidden />
+      <button class="primary" id="picAdd" style="width:100%;margin:6px 0 14px">Choose pictures from this device</button>
+
+      <div class="picgrid" id="picGrid"></div>
+      <p class="hint" id="picEmpty">No pictures yet. Add the hotel rooms, food, products or logo.</p>
+
+      <h4>How to use a picture</h4>
+      <div class="ref">
+        <div>Add an image called <i>"lobby"</i>.</div>
+        <div>Add a hero with <i>"Welcome"</i> using the picture <i>"lobby"</i>.</div>
+        <div>Add a card called <i>"Deluxe Room"</i> saying <i>"Warm bed, hot water."</i> with the picture <i>"room1"</i> for 120000.</div>
+        <div>Add a photo gallery with <i>"lobby", "room1", "food1"</i> in 3 columns.</div>
+        <div>Set the favicon to the picture <i>"logo"</i>.</div>
+      </div>
+
+      <button class="primary" id="picsDone" style="width:100%;margin-top:14px">Done</button>
+    </div>
+  </div>
+
   <div class="sheet" id="design">
     <div class="sheet-in">
       <h3>Design your website</h3>
@@ -304,6 +336,29 @@
         <div>Add a contact form.   Add a footer that says <i>"..."</i>.</div>
         <div>Make the background color dark.   Set the text color to white.</div>
         <div>Make the buttons orange.   Center everything.   Use a wide layout.</div>
+      </div>
+
+      <h4>Pictures from your computer</h4>
+      <div class="ref">
+        <div>Tap <b>Pictures</b>, choose photos, give each a short name.</div>
+        <div>Add an image called <i>"lobby"</i>.</div>
+        <div>Add a hero with <i>"Welcome"</i> using the picture <i>"lobby"</i>.</div>
+        <div>Add a card called <i>"Deluxe Room"</i> saying <i>"Warm bed."</i> with the picture <i>"room1"</i> for 120000.</div>
+        <div>Add a photo gallery with <i>"lobby", "room1"</i> in 3 columns.</div>
+        <div>Set the favicon to the picture <i>"logo"</i>.</div>
+      </div>
+
+      <h4>Hotel, shop and service blocks</h4>
+      <div class="ref">
+        <div>Add a price list with <i>"Breakfast"</i> at 15000, <i>"Dinner"</i> at 30000.</div>
+        <div>Add a testimonial from <i>"Amina K"</i> saying <i>"Great food."</i></div>
+        <div>Add a question <i>"Is parking available?"</i> with the answer <i>"Yes, free."</i></div>
+        <div>Add a contact section with phone <i>"+256..."</i> and email <i>"stay@site.ug"</i>.</div>
+        <div>Add a floating WhatsApp button for <i>"+256..."</i>.</div>
+        <div>Add a footer with <i>"About", "Rooms", "Terms"</i> and the phone <i>"+256..."</i>.</div>
+        <div>Add a card called <i>"Ankara Dress"</i> saying <i>"Cotton, sizes 8 to 16."</i> with the picture <i>"dress1"</i> for 85000.</div>
+        <div>Add the steps <i>"Choose your room", "Pay deposit", "Arrive"</i>.</div>
+        <div>Add a section called <i>"Dining"</i> with the background picture <i>"food1"</i>.</div>
       </div>
 
       <h4>Design and style</h4>
@@ -403,8 +458,8 @@
     });
   })();
 </script>
-<script src="dery2.js?v=1793523907"></script>
-<script src="app.js?v=1793523907"></script>
+<script src="dery2.js?v=1793524897"></script>
+<script src="app.js?v=1793524897"></script>
 
 </body>
 </html>

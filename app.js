@@ -162,6 +162,15 @@
     "Make the navigation sticky.",
     "Add a hero image showing \"https://picsum.photos/1200/600\"",
     "Add custom style \"h1 { letter-spacing: -1px; }\"",
+    'Add a hero with "Welcome" using the picture "lobby"',
+    'Add a card called "Deluxe Room" saying "Warm bed, hot water." with the picture "room1" for 120000',
+    'Add a photo gallery with "lobby", "room1", "food1" in 3 columns',
+    'Add a price list with "Breakfast" at 15000, "Dinner" at 30000',
+    'Add a testimonial from "Amina K" saying "Great food."',
+    'Add a question "Is parking available?" with the answer "Yes, free."',
+    'Add a contact section with phone "+256762306675" and email "stay@lodge.ug"',
+    'Add a floating WhatsApp button for "+256762306675"',
+    'Add an image called "lobby"',
   ];
 
   let acItems = [], acIdx = 0, acStart = -1, acOpen = false;
@@ -258,9 +267,9 @@
     try {
       if (/https?:\/\//.test(ed.value) && api.runAsync) {
         $("stateText").textContent = "Opening the links in your program...";
-        res = await api.runAsync(ed.value);
+        res = await api.runAsync(ed.value, { assets: pics });
       } else {
-        res = api.run(ed.value);
+        res = api.run(ed.value, { assets: pics });
       }
     } catch (err) {
       const msg = err && err.message ? err.message : String(err);
@@ -445,8 +454,8 @@
     if (word === "clear") { tReset("Screen cleared."); termIn.focus(); return true; }
     if (word === "run") {
       const res = /https?:\/\//.test(ed.value) && window.Dery.runAsync
-        ? await window.Dery.runAsync(ed.value)
-        : window.Dery.run(ed.value);
+        ? await window.Dery.runAsync(ed.value, { assets: pics })
+        : window.Dery.run(ed.value, { assets: pics });
       tPrint("> run " + activeFile().name, "t-cmd");
       const out = res.output || [];
       out.forEach((l) => tPrint(String(l)));
@@ -495,8 +504,8 @@
     let res;
     try {
       res = /https?:\/\//.test(attempt.join("\n")) && window.Dery.runAsync
-        ? await window.Dery.runAsync(attempt.join("\n"))
-        : window.Dery.run(attempt.join("\n"));
+        ? await window.Dery.runAsync(attempt.join("\n"), { assets: pics })
+        : window.Dery.run(attempt.join("\n"), { assets: pics });
     } catch (err) {
       tPrint("That crashed: " + (err && err.message ? err.message : String(err)), "t-err");
       return;
@@ -538,6 +547,148 @@
   $("menuBtn").addEventListener("click", () => { $("side").classList.contains("on") ? closeSide() : openSide(); });
   $("scrim").addEventListener("click", closeSide);
   $("newFileBtn").addEventListener("click", newFile);
+
+  // ── picture library: photos from this device, kept with the project ───
+  const PIC_STORE = "dery.pictures.v1";
+
+  function loadPics() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PIC_STORE) || "{}");
+      return raw && typeof raw === "object" ? raw : {};
+    } catch (e) { return {}; }
+  }
+
+  let pics = loadPics();
+
+  function savePics() {
+    try {
+      localStorage.setItem(PIC_STORE, JSON.stringify(pics));
+      return true;
+    } catch (e) {
+      $("stateText").textContent = "The phone's storage is full. Remove a few pictures and try again.";
+      return false;
+    }
+  }
+
+  // shrink big photos so a whole site still fits in the browser's storage
+  function shrinkImage(file, maxSide, quality) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("could not read the file"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("that file is not a picture"));
+        img.onload = () => {
+          const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const c = document.createElement("canvas");
+          c.width = w; c.height = h;
+          const ctx = c.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          const type = /png/i.test(file.type) ? "image/png" : "image/jpeg";
+          resolve(c.toDataURL(type, quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function safeName(name) {
+    const base = String(name).replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[^A-Za-z0-9 _-]/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+    return base.replace(/\s+/g, "-").slice(0, 28) || "picture";
+  }
+
+  function uniqueName(name) {
+    let n = name, i = 2;
+    while (pics[n]) { n = name + "-" + i; i++; }
+    return n;
+  }
+
+  async function addPictureFiles(fileList) {
+    const files = Array.from(fileList || []).filter((f) => /^image\//.test(f.type));
+    if (!files.length) return;
+    $("stateText").textContent = "Adding " + files.length + " picture" + (files.length > 1 ? "s" : "") + "...";
+    for (const f of files) {
+      try {
+        const dataUrl = await shrinkImage(f, 1400, 0.82);
+        const name = uniqueName(safeName(f.name));
+        pics[name] = dataUrl;
+      } catch (err) {
+        $("stateText").textContent = "Skipped " + f.name + ": " + err.message;
+      }
+    }
+    if (savePics()) {
+      $("stateText").textContent = "Pictures saved. Use their names in your code.";
+      run(true);
+    }
+    renderPics();
+  }
+
+  function renderPics() {
+    const grid = $("picGrid");
+    grid.innerHTML = "";
+    const names = Object.keys(pics);
+    $("picEmpty").style.display = names.length ? "none" : "block";
+    names.forEach((name) => {
+      const card = document.createElement("div");
+      card.className = "pic";
+      const img = document.createElement("img");
+      img.src = pics[name];
+      img.alt = name;
+      const label = document.createElement("b");
+      label.textContent = name;
+      const row = document.createElement("div");
+      row.className = "row";
+
+      const use = document.createElement("button");
+      use.textContent = "Insert";
+      use.addEventListener("click", () => {
+        appendSentence('Add an image called "' + name + '".');
+        $("pics").classList.remove("on");
+      });
+
+      const ren = document.createElement("button");
+      ren.textContent = "Rename";
+      ren.addEventListener("click", () => {
+        const next = prompt("New name for this picture:", name);
+        if (!next) return;
+        const clean = safeName(next);
+        if (!clean || clean === name) return;
+        if (pics[clean]) { $("stateText").textContent = "That name is already used."; return; }
+        pics[clean] = pics[name];
+        delete pics[name];
+        savePics();
+        renderPics();
+        $("stateText").textContent = "Renamed to " + clean + ". Update your sentences to use it.";
+      });
+
+      const del = document.createElement("button");
+      del.textContent = "Remove";
+      del.addEventListener("click", () => {
+        if (!confirm("Remove the picture \"" + name + "\"?")) return;
+        delete pics[name];
+        savePics();
+        renderPics();
+        run(true);
+      });
+
+      row.append(use, ren, del);
+      card.append(img, label, row);
+      grid.appendChild(card);
+    });
+  }
+
+  $("picsBtn").addEventListener("click", () => { renderPics(); $("pics").classList.add("on"); });
+  $("picAdd").addEventListener("click", () => $("picInput").click());
+  $("picInput").addEventListener("change", (e) => { addPictureFiles(e.target.files); e.target.value = ""; });
+  $("pics").addEventListener("click", (e) => { if (e.target === $("pics")) $("pics").classList.remove("on"); });
+  $("picsDone").addEventListener("click", () => $("pics").classList.remove("on"));
+
+  // pictures are handed to the language on every run
+  window.DeryPictures = () => pics;
 
   // ── design sheet: tap a style, it writes the sentence ────────────────
   const THEME_OPTIONS = [
