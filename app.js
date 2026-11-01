@@ -681,6 +681,20 @@
     });
   }
 
+  window.__deryAddPictures = addPictureFiles;
+
+  // drag photos straight onto the window
+  ["dragover", "drop"].forEach((ev) => {
+    window.addEventListener(ev, (e) => {
+      e.preventDefault();
+      if (ev === "drop" && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        addPictureFiles(e.dataTransfer.files);
+        renderPics();
+        $("pics").classList.add("on");
+      }
+    });
+  });
+
   $("picsBtn").addEventListener("click", () => { renderPics(); $("pics").classList.add("on"); });
   $("picAdd").addEventListener("click", () => $("picInput").click());
   $("picInput").addEventListener("change", (e) => { addPictureFiles(e.target.files); e.target.value = ""; });
