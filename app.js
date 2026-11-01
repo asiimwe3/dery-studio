@@ -154,6 +154,14 @@
     'Call greet with "Tooro"',
     'Get the link "https://api.open-meteo.com/v1/forecast?latitude=0.65&longitude=30.28&current_weather=true" into data',
     'Show the value of "temperature" in data',
+    "Use a dark theme.",
+    "Use a luxury theme.",
+    "Make the buttons teal.",
+    "Use very round corners.",
+    "Add soft shadows.",
+    "Make the navigation sticky.",
+    "Add a hero image showing \"https://picsum.photos/1200/600\"",
+    "Add custom style \"h1 { letter-spacing: -1px; }\"",
   ];
 
   let acItems = [], acIdx = 0, acStart = -1, acOpen = false;
@@ -530,6 +538,64 @@
   $("menuBtn").addEventListener("click", () => { $("side").classList.contains("on") ? closeSide() : openSide(); });
   $("scrim").addEventListener("click", closeSide);
   $("newFileBtn").addEventListener("click", newFile);
+
+  // ── design sheet: tap a style, it writes the sentence ────────────────
+  const THEME_OPTIONS = [
+    ["Dark", "Use a dark theme."], ["Light", "Use a light theme."], ["Warm", "Use a warm theme."],
+    ["Luxury", "Use a luxury theme."], ["Minimal", "Use a minimal theme."], ["Bold", "Use a bold theme."],
+    ["Fresh", "Use a fresh theme."],
+  ];
+  const SHAPE_OPTIONS = [
+    ["Round corners", "Use very round corners."], ["Square corners", "Use square corners."],
+    ["Soft shadows", "Add soft shadows."], ["Strong shadows", "Add strong shadows."], ["No shadows", "Remove shadows."],
+    ["More space", "Add more space."], ["Tight spacing", "Use tight spacing."],
+    ["Big buttons", "Make the buttons big."], ["Small buttons", "Make the buttons small."],
+    ["Sticky menu", "Make the navigation sticky."], ["Wide layout", "Use a wide layout."],
+    ["Narrow layout", "Use a narrow layout."], ["Center everything", "Center everything."],
+  ];
+  const COLOUR_OPTIONS = [
+    ["Orange", "#FF8A00"], ["Teal", "#0D9488"], ["Blue", "#2563EB"], ["Green", "#16A34A"],
+    ["Purple", "#7C3AED"], ["Gold", "#D4AF37"], ["Red", "#DC2626"], ["Pink", "#EC4899"],
+  ];
+
+  function addChip(box, label, sentence, dot) {
+    const b = document.createElement("button");
+    b.className = "chip" + (dot ? " sw" : "");
+    if (dot) {
+      const d = document.createElement("span");
+      d.className = "dotc";
+      d.style.background = dot;
+      b.appendChild(d);
+    }
+    b.appendChild(document.createTextNode(label));
+    b.addEventListener("click", () => appendSentence(sentence));
+    box.appendChild(b);
+  }
+
+  function appendSentence(sentence) {
+    const f = activeFile();
+    const current = ed.value.replace(/\s+$/, "");
+    ed.value = (current ? current + "\n" : "") + sentence;
+    f.code = ed.value;
+    saveStore();
+    renderFiles();
+    refresh();
+    run(true);
+    $("design").classList.remove("on");
+    if (isMobile()) showView("site");
+  }
+
+  function buildDesign() {
+    const t = $("themeChips"), sh = $("shapeChips"), c = $("colourChips");
+    if (t.children.length) return;
+    THEME_OPTIONS.forEach(([label, s]) => addChip(t, label, s));
+    SHAPE_OPTIONS.forEach(([label, s]) => addChip(sh, label, s));
+    COLOUR_OPTIONS.forEach(([label, hex]) => addChip(c, label, `Make the buttons ${label.toLowerCase()}.`, hex));
+  }
+
+  $("designBtn").addEventListener("click", () => { buildDesign(); $("design").classList.add("on"); });
+  $("design").addEventListener("click", (e) => { if (e.target === $("design")) $("design").classList.remove("on"); });
+  $("designDone").addEventListener("click", () => $("design").classList.remove("on"));
 
   // ── help sheet ───────────────────────────────────────────────────────
   $("helpBtn").addEventListener("click", () => $("sheet").classList.add("on"));

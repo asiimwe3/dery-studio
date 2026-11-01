@@ -651,9 +651,64 @@
     if (/^(create|make|start|build)\b.*\b(page|website|site|document)\b/.test(low)) {
       return { type: "title", value: first || (text.match(/\b(?:called|named)\s+(.+)$/i) || [, "My Website"])[1] };
     }
-    if (/^(set|make|change)\b.*\bbackground\b/.test(low)) return { type: "bg", value: pickColor(text, qs) };
-    if (/^(set|make|change)\b.*\btext\b.*\bcolou?r\b/.test(low)) return { type: "textcolor", value: pickColor(text, qs) };
-    if (/^(set|make|change)\b.*\b(accent|buttons?|highlights?)\b/.test(low)) return { type: "accent", value: pickColor(text, qs) };
+    if (/^(set|make|change)\b.*\bbackground\b/.test(low)) {
+      const c = pickColor(text, qs);
+      if (c) return { type: "bg", value: c };
+    }
+    if (/^(set|make|change)\b.*\btext\b.*\bcolou?r\b/.test(low)) {
+      const c = pickColor(text, qs);
+      if (c) return { type: "textcolor", value: c };
+    }
+    if (/^(set|make|change)\b.*\b(accent|buttons?|highlights?)\b/.test(low)) {
+      const c = pickColor(text, qs);
+      if (c) return { type: "accent", value: c };
+    }
+    // ── themes: one sentence sets colours, font and shape together ──
+    const THEMES = {
+      dark:   { bg: "#0B1224", text: "#F8FAFC", accent: "#FF8A00", fontName: "Inter", radius: 14, shadow: "strong" },
+      light:  { bg: "#FFFFFF", text: "#111827", accent: "#2563EB", fontName: "Inter", radius: 12, shadow: "soft" },
+      warm:   { bg: "#FFF7ED", text: "#3F2A1D", accent: "#EA580C", fontName: "Georgia", radius: 16, shadow: "soft" },
+      luxury: { bg: "#0A0A0A", text: "#F5E9D0", accent: "#D4AF37", fontName: "Playfair Display", radius: 4, shadow: "strong" },
+      minimal:{ bg: "#FFFFFF", text: "#0F172A", accent: "#0F172A", fontName: "Inter", radius: 6, shadow: "none" },
+      bold:   { bg: "#111111", text: "#FFFFFF", accent: "#FACC15", fontName: "Montserrat", radius: 2, shadow: "none" },
+      fresh:  { bg: "#F0FDF4", text: "#14532D", accent: "#16A34A", fontName: "Nunito", radius: 18, shadow: "soft" },
+    };
+    const themeHit = low.match(/^(?:use|set|make|switch to)\s+(?:a\s+|an\s+|the\s+)?(dark|light|warm|luxury|minimal|bold|fresh)\s+(?:theme|style|look)\b/);
+    if (themeHit) return { type: "theme", value: themeHit[1] };
+
+    // ── corners, shadows, spacing, text size, buttons, navigation ──
+    if (/^(use|make|set)\b.*\b(rounded|round)\b.*\bcorner/.test(low) || /^(use|make|set)\b.*\bcorners?\b/.test(low)) {
+      if (/\b(square|sharp|straight)\b/.test(low)) return { type: "shape", radius: 0 };
+      if (/\bvery|extra|super|fully|pill|circle\b/.test(low)) return { type: "shape", radius: 999 };
+      return { type: "shape", radius: 18 };
+    }
+    if (/^(add|use)\b.*\bsoft\b.*\bshadow/.test(low)) return { type: "shape", shadow: "soft" };
+    if (/^(add|use)\b.*\b(strong|deep|big)\b.*\bshadow/.test(low)) return { type: "shape", shadow: "strong" };
+    if (/^(remove|no|without)\b.*\bshadow/.test(low)) return { type: "shape", shadow: "none" };
+    if (/^(add|use)\b.*\bmore\s+(space|spacing|room)\b/.test(low)) return { type: "shape", space: 40 };
+    if (/^(add|use)\b.*\bless\s+(space|spacing)\b/.test(low) || /\btight(er)?\s+(spacing|layout)\b/.test(low)) return { type: "shape", space: 14 };
+    if (/\b(space|spacing)\b.*\b(\d{1,3})\b/.test(low)) return { type: "shape", space: Number(low.match(/\b(\d{1,3})\b/)[1]) };
+    if (/^(use|set|make)\b.*\b(big|large|huge)\b\s+text/.test(low)) return { type: "shape", fontSize: 20 };
+    if (/^(use|set|make)\b.*\b(small|tiny)\b\s+text/.test(low)) return { type: "shape", fontSize: 15 };
+    if (/^(use|set|make)\b.*\btext\s+size\b.*\b(\d{2})\b/.test(low)) return { type: "shape", fontSize: Number(low.match(/\b(\d{2})\b/)[1]) };
+    if (/^(make|use)\b.*\bbuttons?\b.*\b(big|large|wide)\b/.test(low)) return { type: "shape", btnSize: "big" };
+    if (/^(make|use)\b.*\bbuttons?\b.*\b(small|tiny|compact)\b/.test(low)) return { type: "shape", btnSize: "small" };
+    if (/^(make|keep|use)\b.*\b(navigation|nav|menu|header)\b.*\b(sticky|fixed|stick)\b/.test(low)) return { type: "sticky", value: true };
+    if (/^(make|keep|use)\b.*\b(navigation|nav|menu|header)\b.*\b(scroll|normal)\b/.test(low)) return { type: "sticky", value: false };
+    const navColor = low.match(/^(?:set|make|change)\b.*\b(?:header|navigation|nav|menu)\b.*\bcolor\b/);
+    if (navColor) return { type: "navbg", value: pickColor(text, qs) };
+
+    // ── a hero / cover image across the top ──
+    if (/^(add|use|put)\b.*\b(hero|cover|banner)\b.*\bimage|picture|photo/.test(low) && qs[0]) {
+      return { type: "hero", value: qs[0], height: (text.match(/\b(\d{3})\s*(?:pixels|px|tall)\b/i) || [])[1] };
+    }
+
+    // ── escape hatch: your own CSS or HTML ──
+    const css = text.match(/^(?:add|use|put)\s+(?:my\s+)?(?:custom\s+)?(?:style|css)\s*(?:saying|that says|:)?\s*"([^"]*)"/i);
+    if (css) return { type: "customCss", value: css[1] };
+    const html = text.match(/^(?:add|put|insert)\s+(?:my\s+)?(?:custom\s+)?(?:code|html)\s*(?:saying|that says|:)?\s*"([^"]*)"/i);
+    if (html) return { type: "customHtml", value: html[1] };
+
     if (/^(use|set)\b.*\bfont\b/.test(low)) return { type: "font", value: first || text.replace(/.*\bfont\b\s*/i, "").trim() };
     if (/^(center|centre)\b/.test(low)) return { type: "center" };
     if (/\b(wide|full width|narrow)\b/.test(low) && /\b(make|set|use)\b/.test(low)) return { type: "width", value: /\bwide|full width\b/.test(low) ? "wide" : "narrow" };
@@ -718,7 +773,11 @@
     const page = {
       title: "My Website", bg: "#FFFFFF", text: "#111827",
       font: "Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+      fontName: "Inter",
       accent: "#FF8A00", blocks: [], center: false, width: "760px",
+      radius: 12, shadow: "soft", space: 24, fontSize: 17,
+      btnSize: "normal", sticky: false, navBg: "",
+      hero: "", customCss: "", customHtml: "",
     };
     const output = [];
     const runtimeErrors = [];
@@ -743,6 +802,16 @@
       },
     };
 
+    const THEMES = {
+      dark:   { bg: "#0B1224", text: "#F8FAFC", accent: "#FF8A00", fontName: "Inter", radius: 14, shadow: "strong" },
+      light:  { bg: "#FFFFFF", text: "#111827", accent: "#2563EB", fontName: "Inter", radius: 12, shadow: "soft" },
+      warm:   { bg: "#FFF7ED", text: "#3F2A1D", accent: "#EA580C", fontName: "Georgia", radius: 16, shadow: "soft" },
+      luxury: { bg: "#0A0A0A", text: "#F5E9D0", accent: "#D4AF37", fontName: "Playfair Display", radius: 4, shadow: "strong" },
+      minimal:{ bg: "#FFFFFF", text: "#0F172A", accent: "#0F172A", fontName: "Inter", radius: 6, shadow: "none" },
+      bold:   { bg: "#111111", text: "#FFFFFF", accent: "#FACC15", fontName: "Montserrat", radius: 2, shadow: "none" },
+      fresh:  { bg: "#F0FDF4", text: "#14532D", accent: "#16A34A", fontName: "Nunito", radius: 18, shadow: "soft" },
+    };
+
     function targetBlocks() {
       return sectionStack.length ? sectionStack[sectionStack.length - 1].children : page.blocks;
     }
@@ -760,7 +829,33 @@
         case "bg": if (p.value) page.bg = p.value; break;
         case "textcolor": if (p.value) page.text = p.value; break;
         case "accent": if (p.value) page.accent = p.value; break;
-        case "font": if (p.value) page.font = `"${p.value}", system-ui, sans-serif`; break;
+        case "font":
+          if (p.value) {
+            page.fontName = p.value;
+            page.font = `"${p.value}", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+          }
+          break;
+        case "theme": {
+          const t = THEMES[String(p.value).toLowerCase()];
+          if (!t) break;
+          page.bg = t.bg; page.text = t.text; page.accent = t.accent;
+          page.fontName = t.fontName;
+          page.font = `"${t.fontName}", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+          page.radius = t.radius; page.shadow = t.shadow;
+          break;
+        }
+        case "shape":
+          if (p.radius !== undefined) page.radius = p.radius;
+          if (p.shadow) page.shadow = p.shadow;
+          if (p.space !== undefined) page.space = p.space;
+          if (p.fontSize !== undefined) page.fontSize = p.fontSize;
+          if (p.btnSize) page.btnSize = p.btnSize;
+          break;
+        case "sticky": page.sticky = !!p.value; break;
+        case "navbg": page.navBg = p.value || ""; break;
+        case "hero": page.hero = p.value; page.heroHeight = p.height || 320; break;
+        case "customCss": page.customCss = (page.customCss || "") + "\n" + p.value; break;
+        case "customHtml": page.customHtml = (page.customHtml || "") + "\n" + p.value; break;
         case "center": page.center = true; break;
         case "width": page.width = p.value === "wide" ? "1100px" : "620px"; break;
         case "nav": targetBlocks().push({ type: "nav", items: p.items }); break;
@@ -1122,6 +1217,9 @@
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  const GOOGLE_FONTS = ["Inter", "Poppins", "Montserrat", "Lato", "Nunito", "Raleway", "Open Sans",
+    "Roboto", "Playfair Display", "Merriweather", "Oswald", "Source Sans 3", "DM Sans", "Space Grotesk"];
+
   function render(page) {
     function blocks(list, indent) {
       const pad = "  ".repeat(indent || 1);
@@ -1168,36 +1266,42 @@
 <title>${esc(page.title)}</title>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: ${page.font}; background: ${page.bg}; color: ${page.text}; line-height: 1.65; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; font-family: ${page.font}; background: ${page.bg}; color: ${page.text}; font-size: ${page.fontSize}px; line-height: 1.65; -webkit-font-smoothing: antialiased; }
   main { max-width: ${page.width}; margin: 0 auto; padding: 32px 20px 64px; ${page.center ? "text-align: center;" : ""} }
   h1 { font-size: clamp(28px, 6vw, 44px); line-height: 1.15; margin: 0 0 16px; letter-spacing: -0.02em; }
   h2 { font-size: clamp(20px, 4vw, 28px); margin: 32px 0 12px; letter-spacing: -0.01em; }
   p { margin: 0 0 16px; opacity: 0.92; }
-  .nav { display: flex; flex-wrap: wrap; gap: 18px; padding: 16px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); ${page.center ? "justify-content: center;" : ""} }
+  .nav { display: flex; flex-wrap: wrap; gap: 18px; padding: 16px 20px; border-bottom: 1px solid rgba(128,128,128,0.2); ${page.center ? "justify-content: center;" : ""} ${page.navBg ? `background: ${page.navBg};` : ""} ${page.sticky ? "position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);" : ""} }
   .nav a { color: inherit; text-decoration: none; font-weight: 600; font-size: 14px; opacity: 0.85; }
-  .btn { display: inline-block; background: ${page.accent}; color: #fff; padding: 12px 22px; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 15px; border: none; cursor: pointer; margin: 6px 0 14px; }
+  .btn { display: inline-block; background: ${page.accent}; color: #fff; padding: ${page.btnSize === "big" ? "16px 32px" : page.btnSize === "small" ? "8px 16px" : "12px 22px"}; border-radius: ${page.radius}px; text-decoration: none; font-weight: 700; font-size: ${page.btnSize === "big" ? "17px" : page.btnSize === "small" ? "13px" : "15px"}; border: none; cursor: pointer; margin: 6px 0 14px; ${page.shadow === "soft" ? `box-shadow: 0 6px 18px ${page.accent}33;` : page.shadow === "strong" ? `box-shadow: 0 12px 30px ${page.accent}55;` : ""} }
   .btn:hover { filter: brightness(1.08); }
   .link { color: ${page.accent}; font-weight: 600; }
-  img { max-width: 100%; height: auto; border-radius: 12px; display: block; margin: 12px 0; }
+  img { max-width: 100%; height: auto; border-radius: ${page.radius}px; display: block; margin: 12px 0; ${page.shadow === "soft" ? "box-shadow: 0 8px 24px rgba(0,0,0,0.10);" : page.shadow === "strong" ? "box-shadow: 0 16px 40px rgba(0,0,0,0.28);" : ""} }
+  .hero { position: relative; width: 100%; overflow: hidden; border-radius: ${page.radius}px; margin: 0 0 ${Math.round(page.space * 0.9)}px; }
+  .hero img { width: 100%; height: ${page.heroHeight || 320}px; object-fit: cover; margin: 0; border-radius: ${page.radius}px; }
   .img-placeholder { border: 1px dashed rgba(128,128,128,0.4); border-radius: 12px; padding: 48px; text-align: center; opacity: 0.6; margin: 12px 0; }
   ul, ol { padding-left: 22px; margin: 0 0 16px; }
   li { margin-bottom: 6px; }
   hr { border: none; border-top: 1px solid rgba(128,128,128,0.25); margin: 28px 0; }
-  section { margin: 8px 0 24px; }
+  section { margin: ${Math.round(page.space * 0.35)}px 0 ${page.space}px; }
+  h2 { margin-top: ${Math.round(page.space * 1.3)}px; }
+  p { margin-bottom: ${Math.round(page.space * 0.65)}px; }
   .form { display: grid; gap: 12px; margin: 16px 0; }
   .form label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
-  .form input, .form textarea { font: inherit; padding: 11px 13px; border-radius: 10px; border: 1px solid rgba(128,128,128,0.35); background: transparent; color: inherit; width: 100%; }
+  .form input, .form textarea { font: inherit; padding: 11px 13px; border-radius: ${page.radius}px; border: 1px solid rgba(128,128,128,0.35); background: transparent; color: inherit; width: 100%; }
   .sent { color: #16A34A; font-weight: 700; }
   .embed { margin: 16px 0; }
   .embed-note { font-size: 13px; margin: 6px 0 0; opacity: 0.7; }
   .embed-note a { color: ${page.accent}; font-weight: 600; }
   .footer { margin-top: 40px; padding-top: 20px; font-size: 13px; border-top: 1px solid rgba(128,128,128,0.25); opacity: 0.75; }
   @media (max-width: 480px) { main { padding: 24px 16px 48px; } .btn { width: 100%; text-align: center; } }
+${page.customCss || ""}
 </style>
+${GOOGLE_FONTS.includes(page.fontName) ? `<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin /><link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(page.fontName).replace(/%20/g, "+")}:wght@400;600;800&display=swap" rel="stylesheet" />` : ""}
 </head>
 <body>
 ${navs.length ? navs.map((b) => blocks([b], 0)).join("").replace(/^ {0,2}/gm, "") : ""}<main>
-${blocks(rest, 1)}</main>
+${page.hero ? `<div class="hero"><img src="${esc(page.hero)}" alt="Cover" /></div>` : ""}${blocks(rest, 1)}${page.customHtml || ""}</main>
 </body>
 </html>`;
   }
